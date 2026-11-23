@@ -4,14 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BigButton } from '../ui/BigButton';
 import { color } from '../ui/theme';
 
-/** Role picker (A8: no auth; the role is chosen at launch). */
+/** Role picker (no auth: the role is chosen at launch). */
 export default function RolePicker() {
+  const open = (role: 'field' | 'office') => router.push({ pathname: '/layouts', params: { role } });
   return (
     <SafeAreaView style={styles.root}>
       <Text style={styles.title}>Field Form</Text>
       <View style={styles.buttons}>
-        <BigButton label="Field — lay out a space" onPress={() => router.push('/field')} />
-        <BigButton label="Office — review layouts" onPress={() => router.push('/office')} />
+        <BigButton label="Field — lay out a space" onPress={() => open('field')} />
+        <BigButton label="Office — review layouts" onPress={() => open('office')} />
       </View>
     </SafeAreaView>
   );
