@@ -21,6 +21,9 @@ web-build/
 .env*
 !.env.example
 
+# Local tooling
+.serena/
+
 # OS / editor
 .DS_Store
 Thumbs.db
