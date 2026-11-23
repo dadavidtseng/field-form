@@ -1,7 +1,7 @@
 # Field Form — Design
 
 > Working design doc. It is the source for the one-page `NOTES.md` deliverable.
-> Status: draft v1 (2026-11-23). Read this before writing code; update it when a decision changes.
+> Status: draft v2 (2026-11-23). Read this before writing code; update it when a decision changes.
 
 ## 1. Problem in one sentence
 
@@ -21,6 +21,8 @@ These are the assumptions sent to Josh on 2026-11-23. Revisit them if he answers
 | A6 | One outline per layout. A fence is an open outline; a room, deck or patio is closed. | Islands and multiple outlines are cut (see §10). |
 | A7 | Imperial is the default (feet-inches, fractions to 1/16"). Metric is a display toggle. | Values are stored in canonical integer µm, so changing units never changes data. |
 | A8 | No auth. Role (field/office) and a display name are chosen at app launch. | Auth goes in "next week". |
+| A9 | Dana may use a phone **or a tablet**; Marcus uses an iPad. | Both screens are responsive: the field screen keeps its bottom action bar on a phone and gains a side panel on a tablet. |
+| A10 | Reviewers will likely run on iOS (iPad or Simulator), but development and testing happen on Android only. | Use only packages that support both platforms; list iOS as untested in `NOTES.md`. |
 
 ## 3. Platform constraints (verified)
 
@@ -31,11 +33,11 @@ These are the assumptions sent to Josh on 2026-11-23. Revisit them if he answers
 
 ## 4. Interaction design
 
-### 4.1 Core idea: two ways to build one outline
+### 4.1 Core idea: draw it, then measure it
 
-Dana can **draw by hand** or **measure as she walks**, and she can mix the two on the same layout. Both produce the same data: an ordered list of walls.
+The brief says Dana should "attach measurements to **what she's drawn**", so the primary flow is **sketch, then measure** (Mode A). A second, faster flow (**walk the perimeter**, Mode B) is a shortcut for simple rectangles and fence runs. She can mix the two on the same layout, because both produce the same data: an ordered list of walls. If time runs short, Mode B is cut, never Mode A.
 
-**Mode A: Sketch, then measure** (best when she wants the shape on screen before she starts measuring, or the space is odd)
+**Mode A (primary): Sketch, then measure**
 
 ```
 Tap corner → tap corner → tap corner → … → tap the first corner to close
@@ -46,7 +48,7 @@ Tap corner → tap corner → tap corner → … → tap the first corner to clo
 - Sketched walls are drawn **dashed and labelled with "~"**. When a real reading arrives for a wall, it becomes solid and the shape **re-flows to the true length**. The drawing never keeps proportions that contradict its labels.
 - When she finishes the sketch, the armed slot (§4.3) moves to wall 1, so measuring the rest is just tape presses.
 
-**Mode B: Walk the perimeter** (fastest for rectangular rooms, decks and fence runs)
+**Mode B (shortcut): Walk the perimeter** (fastest for rectangular rooms, decks and fence runs)
 
 ```
 Start corner → [reading 12' 4-3/8"] → wall 1 placed →
@@ -72,9 +74,11 @@ turn ↰ 90° (default) → [reading 9' 0"] → wall 2 placed → … → Close
 | Window | wall | offset, width, *(sill height, height)* |
 | Opening | wall | offset, width |
 | Step / stairs | wall | offset, width, rise, run, count |
-| Post | interior | x and y offsets from a chosen corner, size |
+| Post | interior | x and y offsets from a chosen corner, size (caliper) |
 
-Slots in *(italics)* are optional. Dana selects a wall, taps a feature type, and the app **arms the first empty slot**.
+Slots in *(italics)* are optional. Dana selects a wall, taps a feature type, and the app **arms the first empty slot**. Posts are placed by tapping inside the outline; the tap is a sketch position until the offsets are measured, exactly like sketched walls.
+
+**Detail slots (calipers).** Some slots are marked as *detail* dimensions: post size, door jamb depth, trim thickness. When a detail slot is armed, the app expects the caliper and displays the value in mm or to 1/32". Long slots expect the tape. Any source can fill any slot; the hint only picks the default device and display precision.
 
 ### 4.3 Measurement capture: "armed slot", then auto-advance
 
@@ -91,6 +95,8 @@ Slots in *(italics)* are optional. Dana selects a wall, taps a feature type, and
 | Gloves | Touch targets of at least 64 dp. Primary actions sit in a bottom action bar (thumb reach). The core flow (taps and tape presses) needs no drag, long-press or pinch. Sketch taps snap to 15° and 6", with a magnifier above the finger. Hit-testing for selection uses a 32 dp screen-space radius. |
 | Bright sun | High-contrast theme: near-black on white, with REEKON yellow only for the armed/active state. Large numerals (≥ 28 sp). No meaning carried by thin lines or low-contrast greys. Measured walls are solid lines; unmeasured walls are dashed *and* labelled, never colour alone. |
 | Rain (ghost touches on a wet screen) | Destructive actions need confirmation. One big **Undo** is always visible. Repeated taps on the same control are debounced. |
+| 3–5 spaces a day | Creating a layout takes one tap: pick Room, Deck, Patio or Fence, and the name is generated (e.g. "Deck · Nov 23, 2:40 PM"), renamable later. Fence pre-selects an open outline. |
+| Phone or tablet | The same field screen adapts: phone keeps everything in the bottom action bar; tablet moves the dimension list to a side panel. Touch-target sizes stay the same. |
 | Interruptions and no signal | Every op is saved locally first. A sync badge (●Synced / ◐Pending 3 / ○Offline) shows status without blocking work. The screen stays awake while a layout is open (`expo-keep-awake`). |
 
 ### 4.5 Marcus's office view (iPad, landscape)
@@ -246,8 +252,9 @@ interface MeasurementSource {
 }
 ```
 
-- `SimulatedTape` appears in the UI as a small "device" chip with a connection state and battery level, plus a **big round "tape button"** that stands in for the physical button on a T1 tape. Pressing it emits a reading. The value comes from a "plausible next reading" slider (6" to 40'), with ±1/16" jitter so the closure check is realistic.
-- `SimulatedCaliper` is the same interface with mm resolution and a 0 to 300 mm range, for detail work.
+- `SimulatedTape` appears in the UI as a small "device" chip with a connection state and battery level, plus a **big round "tape button"** that stands in for the physical button on a T1 tape. Pressing it emits a reading.
+- **Reading value:** if the armed slot has a sketch estimate (a sketched wall, a tapped post position), the simulated tape reads **that estimate ± up to 1/8"** of random error. Otherwise (Mode B, a new feature), it reads from a "next reading" slider (6" to 40'). This keeps the demo and testing fast, and the small random error makes the closure check show realistic results instead of a perfect zero.
+- `SimulatedCaliper` is the same interface with 0.01 mm resolution and a 0 to 300 mm range. It is the default source when a detail slot is armed (§4.2).
 - A real `BleTape` would implement the same interface in a development build, using `react-native-ble-plx` and REEKON's GATT spec. No UI code would change. This is the main reason the interface exists.
 
 ## 10. Scope and cut lines
@@ -257,16 +264,26 @@ Build top to bottom. If time runs out, cut from the bottom. The last row is neve
 | Priority | Item |
 |---|---|
 | P0 | Monorepo skeleton. Expo Go app on two emulators. One op syncing field → office. |
-| P0 | Perimeter walk (Mode B) with tape and manual input, closing, closure error, undo. |
-| P0 | Sketch mode (Mode A): tap corners with snapping; measured lengths re-flow the shape. |
+| P0 | Sketch mode (Mode A): tap corners with snapping; tape and manual input fill armed slots; measured lengths re-flow the shape; closing, closure error, undo. |
 | P0 | Office view: live canvas, pan/zoom, tap-to-inspect panel. |
-| P1 | Features: door, window, opening, step, with auto-advancing armed slots. |
+| P1 | Features: door, window, opening, step, **post**, with auto-advancing armed slots. |
+| P1 | Caliper source for detail slots. |
 | P1 | Offline outbox and reconnect replay. Sync status badge. |
 | P1 | Quote panel: perimeter, area, missing-dimension count. |
-| P2 | Posts. Caliper source. Metric toggle. |
+| P2 | Walk the perimeter (Mode B shortcut). |
+| P2 | Metric toggle. Tablet layout for the field screen. |
 | P2 | Many-to-many presence (who is viewing). |
 | P3 | Two-way comments (Dana and Marcus) pinned to elements, with quick tags and resolve. |
 | **Never cut** | README setup (< 10 min), `NOTES.md`, 3–5 min recording. Reserve about 2 hours for these. |
+
+**Build order** differs slightly from priority, to front-load risk and dependencies:
+
+1. Skeleton, including the confirmed/pending sync model (retrofitting it later means rewriting the sync client) and spikes for Skia text and server auto-detection.
+2. `shared/`: units, wall geometry, closure, op reducer, with tests.
+3. One canvas renderer with pan/zoom, used by both screens.
+4. Sketch mode with tape, manual keypad and undo.
+5. Office view: live updates and tap-to-inspect. **After this step the core story works end to end and could be submitted.**
+6. P1 items, then P2, then P3. Commit and push after each step.
 
 **Cut outright (go on the "next week" list):** curved walls and freehand strokes, multiple outlines or islands per layout, photo attachments (stored as files with a reference in the DB), cut list and material takeoff, real BLE via a development build, auth and multi-tenant jobs, PDF/DXF export, 3D view.
 
@@ -285,3 +302,5 @@ Build top to bottom. If time runs out, cut from the bottom. The last row is neve
 | Metro and npm workspaces resolution | SDK 58 auto-configures monorepos. If it breaks, `shared/` becomes a path import from `app/`. Verify in the skeleton first. |
 | Emulator can't reach the server | `hostUri` detection, the `10.0.2.2` mapping, a manual override, and a troubleshooting section in the README. |
 | Scope creep in a 24 h window | §10 cut lines. Commit after each P-level so the repo is always shippable. |
+| iOS untested (reviewers likely on iPad or the iOS Simulator; we only have Android) | Only cross-platform packages; avoid Android-only APIs; use safe-area insets everywhere. List as an assumption (A10). |
+| Reviewer's Node version | Expo SDK 58 itself requires Node ^22.13 / ^24.3 / ≥26, so `node:sqlite` adds no extra requirement. State the version in the README. |
