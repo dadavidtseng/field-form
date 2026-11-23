@@ -17,6 +17,28 @@ const hello = (role: 'field' | 'office', lastSeq = 0, clientId = role) =>
   ({ type: 'hello', layoutId: 'L1', clientId, role, lastSeq }) as const;
 const create = { t: 'layout.create', name: 'Kitchen', kind: 'room' } as const;
 
+describe('Hub layout index', () => {
+  it('lists created layouts and tracks whether a field device has them open', () => {
+    const hub = new Hub(openSqliteStore(':memory:'));
+    const marcus = client(hub);
+    marcus.send({ type: 'watchIndex', clientId: 'm', role: 'office' });
+    const lastIndex = () => {
+      const msgs = marcus.inbox.filter((m) => m.type === 'index');
+      const last = msgs[msgs.length - 1];
+      return last?.type === 'index' ? last.layouts : [];
+    };
+    expect(lastIndex()).toEqual([]);
+
+    const dana = client(hub);
+    dana.send(hello('field'));
+    dana.send({ type: 'submit', opId: 'op1', op: create });
+    expect(lastIndex()).toMatchObject([{ id: 'L1', name: 'Kitchen', kind: 'room', live: true, walls: 0 }]);
+
+    dana.close();
+    expect(lastIndex()).toMatchObject([{ id: 'L1', live: false }]);
+  });
+});
+
 describe('Hub contract', () => {
   it('broadcasts one commit to every subscriber, author included', () => {
     const hub = new Hub(openSqliteStore(':memory:'));

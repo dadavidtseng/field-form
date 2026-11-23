@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LayoutKind } from './model';
 import { Op } from './ops';
 
 // Wire protocol between app and sync server. Every message is JSON with a `type` field.
@@ -32,7 +33,14 @@ export const Submit = z.object({
   op: Op,
 });
 
-export const ClientMsg = z.discriminatedUnion('type', [Hello, Submit]);
+/** Subscribe to the live list of layouts (both roles start on the layout list). */
+export const WatchIndex = z.object({
+  type: z.literal('watchIndex'),
+  clientId: Id,
+  role: Role,
+});
+
+export const ClientMsg = z.discriminatedUnion('type', [Hello, Submit, WatchIndex]);
 export type ClientMsg = z.infer<typeof ClientMsg>;
 
 // ---- server → client ----
@@ -65,7 +73,24 @@ export const Reject = z.object({
 });
 export type Reject = z.infer<typeof Reject>;
 
-export const ServerMsg = z.discriminatedUnion('type', [Commit, Ready, Reject]);
+export const LayoutSummary = z.object({
+  id: Id,
+  name: z.string(),
+  kind: LayoutKind,
+  updatedAt: z.number(),
+  walls: z.number().int().nonnegative(),
+  /** A field device has this layout open right now. */
+  live: z.boolean(),
+});
+export type LayoutSummary = z.infer<typeof LayoutSummary>;
+
+/** The full list, most recently edited first. Re-sent whenever any entry changes; it is small. */
+export const Index = z.object({
+  type: z.literal('index'),
+  layouts: z.array(LayoutSummary),
+});
+
+export const ServerMsg = z.discriminatedUnion('type', [Commit, Ready, Reject, Index]);
 export type ServerMsg = z.infer<typeof ServerMsg>;
 
 /** Rejection layer 2: which roles may send which ops. Office may only send comment ops (none exist yet). */

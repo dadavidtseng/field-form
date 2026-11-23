@@ -17,6 +17,8 @@ export interface CommitStore {
   since(layoutId: string, afterSeq: number): StoredCommit[];
   byOpId(opId: string): StoredCommit | undefined;
   append(commit: StoredCommit): void;
+  /** Every layout that has at least one commit. */
+  layoutIds(): string[];
 }
 
 interface Row {
@@ -58,6 +60,7 @@ export function openSqliteStore(path: string): CommitStore {
   const insertStmt = db.prepare(
     'INSERT INTO commits (layout_id, seq, op_id, client_id, op, at) VALUES (?, ?, ?, ?, ?, ?)',
   );
+  const layoutIdsStmt = db.prepare('SELECT DISTINCT layout_id FROM commits');
 
   return {
     since: (layoutId, afterSeq) => (sinceStmt.all(layoutId, afterSeq) as unknown as Row[]).map(toCommit),
@@ -69,5 +72,6 @@ export function openSqliteStore(path: string): CommitStore {
     append: (c) => {
       insertStmt.run(c.layoutId, c.seq, c.opId, c.clientId, JSON.stringify(c.op), c.at);
     },
+    layoutIds: () => (layoutIdsStmt.all() as unknown as { layout_id: string }[]).map((r) => r.layout_id),
   };
 }
