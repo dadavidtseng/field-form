@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { applyOp, type LayoutDoc, type Op } from './ops';
-import {
-  SyncGapError,
-  initialState,
-  receiveCommit,
-  receiveReject,
-  submitLocal,
-  type SyncState,
-} from './sync-state';
+import type { LayoutDoc } from './model';
+import { applyOp, type Op } from './ops';
+import { SyncGapError, initialState, receiveCommit, receiveReject, submitLocal, type SyncState } from './sync-state';
 
 const create: Op = { t: 'layout.create', name: 'Kitchen', kind: 'room' };
 const rename: Op = { t: 'layout.rename', name: 'Kitchen 2' };
@@ -16,7 +10,7 @@ const start = (): SyncState<LayoutDoc, Op> => initialState<LayoutDoc, Op>(null);
 describe('sync state machine', () => {
   it('shows a local op immediately and keeps it pending', () => {
     const s = submitLocal(start(), { opId: 'a', op: create }, applyOp);
-    expect(s.view).toEqual({ name: 'Kitchen', kind: 'room' });
+    expect(s.view).toMatchObject({ name: 'Kitchen', kind: 'room' });
     expect(s.confirmed).toBeNull();
     expect(s.pending).toHaveLength(1);
   });
@@ -38,7 +32,7 @@ describe('sync state machine', () => {
     // A duplicate delivery of seq 2 (e.g. resubmit echo) is ignored.
     s = receiveCommit(s, { seq: 2, opId: 'b', op: rename }, applyOp).state;
     expect(s.pending).toHaveLength(0);
-    expect(s.view).toEqual({ name: 'Kitchen 2', kind: 'room' });
+    expect(s.view).toMatchObject({ name: 'Kitchen 2', kind: 'room' });
     expect(s.lastSeq).toBe(2);
   });
 

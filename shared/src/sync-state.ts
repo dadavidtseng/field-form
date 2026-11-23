@@ -74,11 +74,7 @@ export function receiveReject<D, O>(
   return rebuild({ ...s, pending }, apply, [{ ...rejected, reason: r.message }]);
 }
 
-function rebuild<D, O>(
-  s: SyncState<D, O>,
-  apply: Apply<D, O>,
-  dropped: Dropped<O>[] = [],
-): Transition<D, O> {
+function rebuild<D, O>(s: SyncState<D, O>, apply: Apply<D, O>, dropped: Dropped<O>[] = []): Transition<D, O> {
   let view = s.confirmed;
   const kept: Pending<O>[] = [];
   for (const p of s.pending) {
