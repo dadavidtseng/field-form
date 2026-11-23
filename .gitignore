@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Expo / Metro
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# Native folders (Expo Go only; never prebuilt)
+/app/ios/
+/app/android/
+
+# Server data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Env and secrets
+.env*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
