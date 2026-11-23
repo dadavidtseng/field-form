@@ -1,7 +1,7 @@
 # Field Form — Design
 
 > Working design doc. It is the source for the one-page `NOTES.md` deliverable.
-> Status: draft v2 (2026-11-23). Read this before writing code; update it when a decision changes.
+> Status: draft v3 (2026-11-23). Read this before writing code; update it when a decision changes.
 
 ## 1. Problem in one sentence
 
@@ -21,13 +21,13 @@ These are the assumptions sent to Josh on 2026-11-23. Revisit them if he answers
 | A6 | One outline per layout. A fence is an open outline; a room, deck or patio is closed. | Islands and multiple outlines are cut (see §10). |
 | A7 | Imperial is the default (feet-inches, fractions to 1/16"). Metric is a display toggle. | Values are stored in canonical integer µm, so changing units never changes data. |
 | A8 | No auth. Role (field/office) and a display name are chosen at app launch. | Auth goes in "next week". |
-| A9 | Dana may use a phone **or a tablet**; Marcus uses an iPad. | Both screens are responsive: the field screen keeps its bottom action bar on a phone and gains a side panel on a tablet. |
+| A9 | Dana may use a phone **or a tablet**; Marcus uses an iPad. | The field screen is usable on both from the first build (bottom action bar, no phone-only assumptions). A tablet side panel is a later enhancement. |
 | A10 | Reviewers will likely run on iOS (iPad or Simulator), but development and testing happen on Android only. | Use only packages that support both platforms; list iOS as untested in `NOTES.md`. |
 
-## 3. Platform constraints (verified)
+## 3. Platform constraints (checked against Expo's changelog and the App Store; confirmed at runtime by the step 1 gate)
 
 - **Expo SDK 58** (React Native 0.88). Expo Go 58.0.5 on the App Store added SDK 58 support on 2026-10-22 and supports only SDK 58. Scaffold with `npx create-expo-app --template default@sdk-58`. Install every native-backed package with `npx expo install` so its version matches what Expo Go bundles.
-- **No native Bluetooth in Expo Go.** `react-native-ble-plx` needs a development build. Measurement input therefore goes through a `MeasurementSource` interface, with a simulated tape implementation (§6).
+- **No native Bluetooth in Expo Go.** `react-native-ble-plx` needs a development build. Measurement input therefore goes through a `MeasurementSource` interface, with a simulated tape implementation (§9).
 - **No backend-as-a-service.** We provide our own Node server that runs with `npm run dev`. A Dockerfile is offered as an alternative.
 - **Development is on Windows**, so there is no iOS Simulator. We test on Android emulators: a phone (Dana) and a tablet (Marcus, standing in for the iPad).
 
@@ -68,15 +68,15 @@ turn ↰ 90° (default) → [reading 9' 0"] → wall 2 placed → … → Close
 
 ### 4.2 Features attach to walls
 
-| Feature | Anchored to | Dimension slots |
-|---|---|---|
-| Door | wall | offset from wall start, width, *(height)* |
-| Window | wall | offset, width, *(sill height, height)* |
-| Opening | wall | offset, width |
-| Step / stairs | wall | offset, width, rise, run, count |
-| Post | interior | x and y offsets from a chosen corner, size (caliper) |
+| Feature | Anchored to | Basic slots (P0) | Advanced slots (P1) |
+|---|---|---|---|
+| Door | wall | offset from wall start, width | height, jamb depth (caliper) |
+| Window | wall | offset, width | sill height, height |
+| Opening | wall | offset, width | — |
+| Step / stairs | wall | offset, width | rise, run, count |
+| Post | interior | x and y offsets from a chosen corner | size (caliper) |
 
-Slots in *(italics)* are optional. Dana selects a wall, taps a feature type, and the app **arms the first empty slot**. Posts are placed by tapping inside the outline; the tap is a sketch position until the offsets are measured, exactly like sketched walls.
+Basic slots are part of the minimum submission, because "mark features" is one of Dana's three required tasks. Advanced slots are optional and come later. Dana selects a wall, taps a feature type, and the app **arms the first empty slot**. Posts are placed by tapping inside the outline; the tap is a sketch position until the offsets are measured, exactly like sketched walls.
 
 **Detail slots (calipers).** Some slots are marked as *detail* dimensions: post size, door jamb depth, trim thickness. When a detail slot is armed, the app expects the caliper and displays the value in mm or to 1/32". Long slots expect the tape. Any source can fill any slot; the hint only picks the default device and display precision.
 
@@ -96,7 +96,7 @@ Slots in *(italics)* are optional. Dana selects a wall, taps a feature type, and
 | Bright sun | High-contrast theme: near-black on white, with REEKON yellow only for the armed/active state. Large numerals (≥ 28 sp). No meaning carried by thin lines or low-contrast greys. Measured walls are solid lines; unmeasured walls are dashed *and* labelled, never colour alone. |
 | Rain (ghost touches on a wet screen) | Destructive actions need confirmation. One big **Undo** is always visible. Repeated taps on the same control are debounced. |
 | 3–5 spaces a day | Creating a layout takes one tap: pick Room, Deck, Patio or Fence, and the name is generated (e.g. "Deck · Nov 23, 2:40 PM"), renamable later. Fence pre-selects an open outline. |
-| Phone or tablet | The same field screen adapts: phone keeps everything in the bottom action bar; tablet moves the dimension list to a side panel. Touch-target sizes stay the same. |
+| Phone or tablet | **Baseline (P0):** the field screen works on both. The canvas fills the screen, controls live in a bottom action bar sized in dp with safe-area insets, and nothing assumes a phone's width or a portrait orientation. **Later (P2):** on a tablet, the dimension list moves into a side panel. Touch-target sizes never change. |
 | Interruptions and no signal | Every op is saved locally first. A sync badge (●Synced / ◐Pending 3 / ○Offline) shows status without blocking work. The screen stays awake while a layout is open (`expo-keep-awake`). |
 
 ### 4.5 Marcus's office view (iPad, landscape)
@@ -106,7 +106,16 @@ Slots in *(italics)* are optional. Dana selects a wall, taps a feature type, and
 - **Tap to inspect:** tapping a wall, feature or dimension opens a side panel with the value in feet-inches *and* mm, its source, device, time, and who captured it.
 - **Quote-ready numbers:** a side panel shows perimeter (linear ft, for fences and trim), area (sq ft via the shoelace formula, for decks and flooring), closure error, and the count of missing dimensions. These are the first things an estimator needs, and they are cheap to compute from our model.
 
-### 4.6 Comments: a two-way thread pinned to the layout
+### 4.6 Finding a layout: the shared layout list
+
+Both roles start on the same **layout list**, served by the sync server. Nobody types an ID or a join code: there is no auth and one crew (A8), so a code would only add a step.
+
+- The list shows every layout, **most recently edited first**, with its kind (Room, Deck, Patio, Fence), last editor, and a **● live** marker while a field device is editing it.
+- **Dana** creates a layout with one tap (§4.4); it is created locally first, so this works offline and the layout appears on the server when she reconnects.
+- **Marcus** sees a new layout appear at the top of his list the moment Dana creates it. A **Follow Dana** toggle (on by default) opens it automatically, so when Dana moves to the next space of the day, Marcus's screen follows without him doing anything. Turning it off keeps him on the layout he is reviewing.
+- The list updates live over the same WebSocket (§7), not by polling.
+
+### 4.7 Comments: a two-way thread pinned to the layout
 
 Both roles can comment, because the conversation runs both ways: Marcus asks "Re-check this wall, the closure is off 1/2"", and Dana answers "Confirmed, the wall is out of plumb" or flags "Rotten joist under the door".
 
@@ -123,7 +132,7 @@ flowchart LR
     UI[Screens: Field / Office] --> Store[Zustand store<br/>confirmed doc + pending ops]
     Tape[MeasurementSource<br/>SimulatedTape] --> UI
     Store --> Canvas[Skia canvas<br/>transform on UI thread]
-    Store <--> Outbox[(expo-sqlite<br/>snapshot + outbox)]
+    Store <--> Outbox[(expo-sqlite<br/>confirmed + lastSeq + pending)]
     Store <--> WS[SyncClient<br/>WebSocket]
   end
   WS <-->|JSON ops| Server[Node sync server<br/>ws + node:sqlite]
@@ -163,15 +172,29 @@ type Wall = {
   length: Dimension                      // measured value (null until measured)
   sketchUm: Um                           // estimate from a sketch tap or default; used while length.value is null
 }
-type Outline = { closed: boolean; start: { x: Um; y: Um }; headingDeg: number; walls: Wall[] }
+type Outline = {
+  start: { x: Um; y: Um }
+  headingDeg: number
+  walls: Wall[]                          // the walls Dana drew, in order
+  closingWallId: string | null           // set when closed; see "Identity rules"
+  closingLength: Dimension               // Dana's measurement of the closing wall (optional)
+}
 
 type Feature =
   | { id; kind: 'door' | 'window' | 'opening'; wallId; offset: Dimension; width: Dimension; height?: Dimension; sill?: Dimension }
-  | { id; kind: 'step'; wallId; offset; width; rise; run; count: number }
-  | { id; kind: 'post'; cornerIndex: number; dx: Dimension; dy: Dimension; size: Dimension }
+  | { id; kind: 'step'; wallId; offset; width; rise?; run?; count?: number }
+  | { id; kind: 'post'; cornerWallId: string; dx: Dimension; dy: Dimension; size?: Dimension }
 
-type Layout = { id; name; kind: 'room' | 'deck' | 'patio' | 'fence' | 'other'; outline: Outline; features: Record<string, Feature>; closingMeasured?: Dimension }
+type Layout = { id; name; kind: 'room' | 'deck' | 'patio' | 'fence' | 'other'; outline: Outline; features: Record<string, Feature> }
 ```
+
+### Identity rules
+
+- **Every selectable thing has a stable ID, never a position.** Walls, the closing wall, features and comments all have IDs. References always use IDs, so inserting or removing a wall can never silently re-point a door or post at something else.
+- **The closing wall is a real, addressable wall.** `outline.close` assigns it an ID (`closingWallId`). Its *geometry* is derived (from the last corner back to the start), but doors, windows and steps can attach to it by ID like any other wall, and Dana can measure it (`closingLength`).
+- **A corner is identified by the wall that starts at it.** A post stores `cornerWallId` and its offsets are measured from the start of that wall. The closing wall's start corner is addressable the same way.
+- **Measured values are never changed silently.** Drawn walls always use their measured length when they have one. Only the closing wall's length is computed. If Dana measured it, the app shows the **closure error** = measured − computed, coloured by tolerance. Nothing is adjusted to make the numbers agree; a wrong reading stays visible until Dana re-measures.
+- **Features that no longer fit are flagged, not moved.** If a wall becomes shorter than a feature's offset + width (after a re-measure), the feature shows a **"doesn't fit"** warning on both devices. Its values are left as Dana entered them.
 
 ### Ops (the only way state changes)
 
@@ -181,8 +204,10 @@ type Op =
   | { t: 'layout.rename'; name: string }
   | { t: 'wall.add'; wall: Wall; index?: number }
   | { t: 'wall.update'; id: string; patch: Partial<Wall> }
-  | { t: 'wall.remove'; id: string }
-  | { t: 'outline.close'; closed: boolean }
+  | { t: 'wall.remove'; id: string }                      // cascades: also removes that wall's features
+  | { t: 'outline.close'; closingWallId: string }
+  | { t: 'outline.open' }                                 // removes the closing wall; cascades its features
+  | { t: 'batch'; ops: Op[] }                             // all-or-nothing; see "Atomic edits"
   | { t: 'feature.add'; feature: Feature }
   | { t: 'feature.update'; id: string; patch: Partial<Feature> }
   | { t: 'feature.remove'; id: string }
@@ -191,9 +216,16 @@ type Op =
   | { t: 'comment.resolve'; id: string; resolved: boolean }
 ```
 
-- `applyOp(layout, op) → { layout, inverse }` is a **pure** function.
+- `applyOp(layout, op) → { layout, inverse }` is a **pure** function. It throws a typed `OpError {code: 'conflict', message}` when a domain precondition fails (target missing, duplicate ID, wall would leave the outline invalid).
 - **Undo** sends the inverse as a *new* op. History is never rewritten, so undo syncs the same way as any other edit, and the op log stays a complete audit trail.
 - Geometry (corner positions, area, perimeter, closure) is **derived** and memoised. It is never stored.
+
+### Atomic edits
+
+- A **batch** applies all of its ops or none: if any op throws, the whole batch fails and the layout is unchanged.
+- One user action = one batch = **one undo step, one server commit (one `seq`), one pending row on the device.** Persistence and sync share the same transaction boundary.
+- **Structural ops capture everything they affect in their inverse.** The inverse of `wall.remove` is a batch: `wall.add` at the original index, then `feature.add` for every feature that was attached to it. Undo therefore restores the wall, its position and its doors/windows together. `outline.open` works the same way for the closing wall.
+- Multi-step UI actions are batches too: finishing a sketch (N × `wall.add` + `outline.close`), or adding a door with its first measurement.
 
 ## 7. Sync protocol
 
@@ -205,22 +237,53 @@ sequenceDiagram
   participant S as Server
   participant M as Marcus (office)
   D->>S: hello {layoutId, clientId, role, lastSeq}
-  S-->>D: welcome {ops since lastSeq | snapshot, headSeq}
-  M->>S: hello {layoutId, …, role: office}
-  D->>D: apply op locally + write to outbox
-  D->>S: op {opId, op}
-  S->>S: validate (role, schema) → applyOp → seq++ → persist
-  S-->>D: ack {opId, seq}
-  S-->>M: op {seq, opId, op, by}
-  Note over D: offline: ops queue in outbox
-  D->>S: (reconnect) hello {lastSeq} then resend outbox
-  S-->>D: ack (duplicate opIds are acked without re-applying)
+  S-->>D: commits since lastSeq, then ready {headSeq}
+  M->>S: hello {layoutId, …, role: office, lastSeq}
+  D->>D: apply op locally + insert pending row (one transaction)
+  D->>S: submit {opId, op}
+  S->>S: schema → role → applyOp → seq++ → persist (one transaction)
+  S-->>D: commit {seq, opId, clientId, op}
+  S-->>M: commit {seq, opId, clientId, op}
+  Note over D: offline: pending rows accumulate
+  D->>S: (reconnect) hello {lastSeq}
+  S-->>D: commits since lastSeq (may include D's own unacked ops)
+  D->>S: resubmit remaining pending, in order
+  S-->>D: commit (a known opId returns its original commit; never applied twice)
 ```
 
-- **Client state** = `confirmed` (server-ordered ops up to `lastSeq`) + `pending` (unacknowledged local ops, re-applied on top). When a remote op arrives, the client rebuilds from `confirmed + op`, then re-applies `pending` (a rebase). Because the reducer is pure, this costs little.
-- **Idempotency:** every op carries a client-generated UUID (`opId`). The server stores the opIds it has seen, so retrying after a dropped connection is safe.
-- **Conflicts:** with one field writer (A1) there are effectively none. With N writers, per-field last-writer-wins by server sequence applies, and an op that targets a deleted entity is rejected and dropped by the client. This limitation is documented, not hidden.
-- **Authorization:** the server rejects geometry and dimension ops from `role: office` (A3). Comment ops are the only ops the office role may send. The field role may send everything.
+### Commit and reconnect contract
+
+- **One authoritative envelope:** `Commit {seq, opId, clientId, op}`. The server sends it to **every** subscriber of the layout, including the author. There is no separate ack message: the author's own commit *is* the ack.
+- **Client state** (saved in `expo-sqlite`): `confirmed` layout, `lastSeq`, and an ordered `pending` list of `{opId, op}`. The screen shows `confirmed` with `pending` re-applied on top.
+- **Client rule on every incoming commit** (one transaction):
+  1. If `seq ≤ lastSeq`: ignore it (already applied).
+  2. Apply `op` to `confirmed`; set `lastSeq = seq`.
+  3. If a pending entry has the same `opId`: delete it.
+  4. Rebuild the view: `confirmed` + remaining `pending` (failures handled by the rejection contract below).
+- **Reconnect never uses snapshots.** The server always replays every commit after the client's `lastSeq`, in order. A per-layout log is a few hundred small ops, so replay is cheap, and it means an edit whose ack was lost comes back as an ordinary commit and clears its own pending entry through rule 3. A first-time viewer sends `lastSeq = 0` and replays the whole log.
+- **Only after replay finishes** (`ready`) does the client resubmit whatever is still pending, in its original order.
+- **Server idempotency:** the server keeps `opId → seq`. A submit with a known `opId` is not applied again; the server re-sends the original commit envelope.
+- **Server persistence:** applying an op, assigning `seq` and inserting the log row happen in one SQLite transaction, before any commit is broadcast.
+
+### Rejection contract
+
+The server checks every submit in three layers, and each failure has its own code:
+
+| Layer | Check | Code |
+|---|---|---|
+| 1. Format | The message and op match the `zod` schema in `shared/` (untrusted input) | `invalid` |
+| 2. Permission | The sender's role may send this op type (office → comment ops only) | `forbidden` |
+| 3. Domain | `applyOp` preconditions on the current server state (target exists, IDs unique) | `conflict` |
+
+- The server replies to the author only: `Reject {opId, code, message}`. Rejected ops are never written to the log and never get a `seq`.
+- **Client handling:** remove the rejected op from `pending`, rebuild the view, and show a short message Dana can act on (e.g. "Couldn't add door: its wall was deleted").
+- **Dependent pending ops:** during the rebuild, any remaining pending op that now throws locally (because it depended on the rejected one) is also removed, and folded into the same message ("…and 2 related edits"). The queue never blocks: every pending op is eventually committed or explained.
+- Rejections are logged on the server with the code, so silent data loss is impossible to miss during review.
+
+### Other rules
+
+- **Layout list:** on connect, every client sends `subscribeIndex` and receives `index {layouts: [{id, name, kind, updatedAt, lastEditor, live}]}`. The server pushes `indexChanged` whenever a layout is created, renamed, edited, or a field device opens or leaves it. "Follow Dana" is purely client-side: when `indexChanged` reports a different layout as live from a field device, the office app opens it.
+- **Conflicts:** with one field writer (A1) there are effectively none. With N writers, per-field last-writer-wins by server sequence applies, and an op that targets a deleted entity is rejected with `conflict` (see the rejection contract). This limitation is documented, not hidden.
 - **Transport:** plain WebSocket. React Native has it built in, and the server uses `ws`. Reconnect uses exponential backoff with jitter, capped at 10 s, plus an immediate retry when NetInfo reports the network is back.
 - **Server discovery:** read the host from `Constants.expoConfig.hostUri` and use port `8787`. On Android, `localhost`/`127.0.0.1` is mapped to `10.0.2.2`. The Settings screen allows a manual override.
 
@@ -235,6 +298,7 @@ All native-backed packages are bundled in Expo Go SDK 58. Versions are pinned by
 | `expo-router` | Default in the SDK 58 template. File-based screens: role picker → layout list → field or office view. | React Navigation configured by hand: same engine, more boilerplate. |
 | `zustand` | About 1 KB. Selector subscriptions mean only the panels that changed re-render. Easy to drive from the sync client outside React. | Redux Toolkit: ceremony without benefit at this size. Plain Context: re-renders every consumer on each op. |
 | `expo-sqlite` | Transactional "apply op + enqueue in outbox" on the device, so a crash cannot lose an edit or double-send it. | AsyncStorage: no transactions; rewriting the whole blob per op. |
+| `zod` (in `shared/`) | One schema defines every protocol message and op: the server uses it to validate untrusted input (rejection layer 1), and both sides derive their TypeScript types from it, so the checks can't drift from the types. Pure JavaScript, runs in Hermes. | Hand-written type guards: drift from the types over time. `ajv`: heavier, and its code generation relies on `new Function`, a risk under Hermes. |
 | `expo-haptics`, `expo-keep-awake`, `@react-native-community/netinfo`, `expo-crypto` (UUIDs) | Field ergonomics and reliability, all small and in Expo Go. | — |
 | Server: `ws` + `node:sqlite` + `tsx` | No native build step. `node:sqlite` is built into Node ≥ 22.13, which keeps setup under 10 minutes. One SQLite file holds the op log. | `better-sqlite3`: node-gyp builds fail on reviewer machines. socket.io: an extra protocol layer we don't need. Express/Fastify: one HTTP route doesn't justify a framework. |
 | Sync model: custom op log | Single writer (A1, A3) means no real conflicts. The server can validate and authorize each op. The op log is human-readable JSON and doubles as an audit history. | **Yjs**: binary updates are opaque to the server, so there's no per-op authorization, and it needs a `getRandomValues` polyfill. **Automerge**: needs WebAssembly, which Hermes doesn't support. Both solve multi-writer merging, a problem A1 says we don't have. |
@@ -253,7 +317,8 @@ interface MeasurementSource {
 ```
 
 - `SimulatedTape` appears in the UI as a small "device" chip with a connection state and battery level, plus a **big round "tape button"** that stands in for the physical button on a T1 tape. Pressing it emits a reading.
-- **Reading value:** if the armed slot has a sketch estimate (a sketched wall, a tapped post position), the simulated tape reads **that estimate ± up to 1/8"** of random error. Otherwise (Mode B, a new feature), it reads from a "next reading" slider (6" to 40'). This keeps the demo and testing fast, and the small random error makes the closure check show realistic results instead of a perfect zero.
+- **Reading value is predictable.** The simulator shows the **next reading** it will send, and Dana (or the person testing) can edit it before pressing the button. It defaults to the armed slot's sketch estimate (a sketched wall, a tapped post position), or to the last value used when there is no estimate.
+- **Measurement error is an optional, repeatable toggle.** With "Realistic error" off, the tape sends exactly the next reading. With it on, it adds up to ±1/8" from a **fixed-seed** random generator, so the same sequence of presses always produces the same readings. Demos and closure checks are reproducible, and the closure error can still show a realistic non-zero value.
 - `SimulatedCaliper` is the same interface with 0.01 mm resolution and a 0 to 300 mm range. It is the default source when a detail slot is armed (§4.2).
 - A real `BleTape` would implement the same interface in a development build, using `react-native-ble-plx` and REEKON's GATT spec. No UI code would change. This is the main reason the interface exists.
 
@@ -263,11 +328,12 @@ Build top to bottom. If time runs out, cut from the bottom. The last row is neve
 
 | Priority | Item |
 |---|---|
-| P0 | Monorepo skeleton. Expo Go app on two emulators. One op syncing field → office. |
-| P0 | Sketch mode (Mode A): tap corners with snapping; tape and manual input fill armed slots; measured lengths re-flow the shape; closing, closure error, undo. |
+| P0 | Expo compatibility gate, monorepo skeleton, Expo Go app on two emulators, one op syncing field → office. |
+| P0 | Shared layout list with live updates and one-tap create; Follow Dana on the office side. |
+| P0 | Sketch mode (Mode A): tap corners with snapping; tape (predictable simulator) and manual input fill armed slots; measured lengths re-flow the shape; closing, closure error, undo. Usable on phone and tablet. |
+| P0 | **Basic features:** door, window, opening, step (offset + width) and post (x + y offsets), with auto-advancing armed slots. |
 | P0 | Office view: live canvas, pan/zoom, tap-to-inspect panel. |
-| P1 | Features: door, window, opening, step, **post**, with auto-advancing armed slots. |
-| P1 | Caliper source for detail slots. |
+| P1 | Advanced feature slots (height, sill, rise/run/count, post size) and the caliper source for detail slots. |
 | P1 | Offline outbox and reconnect replay. Sync status badge. |
 | P1 | Quote panel: perimeter, area, missing-dimension count. |
 | P2 | Walk the perimeter (Mode B shortcut). |
@@ -278,26 +344,36 @@ Build top to bottom. If time runs out, cut from the bottom. The last row is neve
 
 **Build order** differs slightly from priority, to front-load risk and dependencies:
 
-1. Skeleton, including the confirmed/pending sync model (retrofitting it later means rewriting the sync client) and spikes for Skia text and server auto-detection.
+1. **Expo compatibility gate, then skeleton.** First, prove the platform instead of trusting documentation: create the app from the template, add every planned package with `npx expo install`, run `npx expo-doctor`, and render a Skia line + text label driven by Reanimated and Gesture Handler inside Expo Go on the emulator. Only then build the skeleton: monorepo, server, the confirmed/pending sync model (retrofitting it later means rewriting the sync client), and server auto-detection.
 2. `shared/`: units, wall geometry, closure, op reducer, with tests.
-3. One canvas renderer with pan/zoom, used by both screens.
-4. Sketch mode with tape, manual keypad and undo.
-5. Office view: live updates and tap-to-inspect. **After this step the core story works end to end and could be submitted.**
-6. P1 items, then P2, then P3. Commit and push after each step.
+3. Layout list and one canvas renderer with pan/zoom, used by both screens.
+4. Sketch mode with the predictable tape simulator, manual keypad and undo.
+5. Basic features (door, window, opening, step, post).
+6. Office view: live updates, Follow Dana and tap-to-inspect. **After this step the minimum demo works end to end and could be submitted:** draw → mark features → attach measurements → see it live on Marcus's device → pan, zoom, inspect.
+7. P1 items (offline replay first), then P2, then P3. Commit and push after each step.
 
 **Cut outright (go on the "next week" list):** curved walls and freehand strokes, multiple outlines or islands per layout, photo attachments (stored as files with a reference in the DB), cut list and material takeoff, real BLE via a development build, auth and multi-tenant jobs, PDF/DXF export, 3D view.
 
 ## 11. Testing and verification
 
 - **Unit tests (Vitest, `shared/`):** units parse/format round-trip with fraction carry (`11-63/64"` → `1' 0"`); turtle geometry for a rectangle, an L-shape and a 45° bay; closure error; `applyOp`/inverse round-trip for every op type; rebasing pending ops over remote ops.
-- **Server tests:** duplicate opId is acked without re-applying; office role can send comment ops but not geometry ops; replay from `lastSeq`.
+- **Server tests:** duplicate opId returns the original commit without re-applying; office role can send comment ops but not geometry ops (`forbidden`); malformed message (`invalid`); replay from `lastSeq`.
+- **Contract tests (`shared/` + server, the cases a demo would hide):**
+  - **Lost ack:** server commits an op, the connection drops before the client sees it, the client reconnects. The op is applied exactly once and leaves `pending`.
+  - **Reconnect replay:** a client offline for several ops (its own and others') converges to the server state.
+  - **Closing wall:** a door on the closing wall survives re-measuring other walls; closure error is measured − computed and no measured value changes.
+  - **Delete + undo:** removing a wall with a door and a window, then undoing, restores the wall at the same index with both features.
+  - **Batch atomicity:** a batch whose last op fails leaves the layout unchanged.
+  - **Dependent rejection:** a rejected `wall.add` also removes a pending `feature.add` on that wall, with one combined message.
 - **Sketch tests (`shared/`):** tapped corners convert to walls with snapped turns and lengths; measuring a sketched wall re-flows later corners.
-- **Manual end-to-end (and the demo script):** two emulators side by side. Draw a room on the phone while it appears live on the tablet. Turn the phone's network off, keep measuring, turn it back on, and watch the office view catch up.
+- **Simulator tests (`shared/`):** with "Realistic error" on, the same seed and press sequence produce identical readings; with it off, the reading equals the next-reading value exactly.
+- **Manual end-to-end (and the demo script):** two emulators side by side. Create a layout on the phone and watch the tablet follow it. Draw a room, add a door and a post, and measure them while it all appears live on the tablet. Turn the phone's network off, keep measuring, turn it back on, and watch the office view catch up.
 
 ## 12. Risks
 
 | Risk | Mitigation |
 |---|---|
+| A planned package is missing from, or a different version in, Expo Go SDK 58 | The compatibility gate at the start of build step 1 (`expo install`, `expo-doctor`, a render test in Expo Go) runs before any feature code. If a package fails, swap it now (e.g. Skia → `react-native-svg`) and record why. |
 | Skia text needs a font on native | Use `matchFont()` with the system font; fall back to a bundled font via `useFont`. Spike this in the P0 skeleton. |
 | Metro and npm workspaces resolution | SDK 58 auto-configures monorepos. If it breaks, `shared/` becomes a path import from `app/`. Verify in the skeleton first. |
 | Emulator can't reach the server | `hostUri` detection, the `10.0.2.2` mapping, a manual override, and a troubleshooting section in the README. |
