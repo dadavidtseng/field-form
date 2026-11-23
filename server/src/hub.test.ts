@@ -68,7 +68,9 @@ describe('Hub contract', () => {
     dana.send(hello('field'));
     dana.send({ type: 'submit', opId: 'r1', op: { t: 'layout.rename', name: 'X' } });
 
-    const codes = [...marcus.inbox, ...dana.inbox].filter((m) => m.type === 'reject').map((m) => m.type === 'reject' && m.code);
+    const codes = [...marcus.inbox, ...dana.inbox]
+      .filter((m) => m.type === 'reject')
+      .map((m) => m.type === 'reject' && m.code);
     expect(codes).toEqual(['invalid', 'forbidden', 'conflict']);
     expect([...marcus.inbox, ...dana.inbox].some((m) => m.type === 'commit')).toBe(false);
   });
