@@ -1,12 +1,9 @@
 import type { Role } from '@field-form/shared';
-import { randomUUID } from 'expo-crypto';
 import { useEffect, useMemo } from 'react';
 import { useStore } from 'zustand';
 import { SyncClient } from './SyncClient';
+import { CLIENT_ID } from './clientId';
 import { syncUrl } from './serverUrl';
-
-/** One id per app launch. Identifies this device's edits in commits. */
-const CLIENT_ID = randomUUID();
 
 /** Connects to one layout while the screen is mounted. */
 export function useLayoutSync(layoutId: string, role: Role) {

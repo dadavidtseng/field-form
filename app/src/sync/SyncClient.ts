@@ -1,21 +1,21 @@
 import {
   OpError,
-  ServerMsg,
   SyncGapError,
   applyOp,
   initialState,
   receiveCommit,
   receiveReject,
   submitLocal,
-  type ClientMsg,
   type Dropped,
   type LayoutDoc,
   type Op,
   type Role,
+  type ServerMsg,
   type SyncState,
 } from '@field-form/shared';
 import { randomUUID } from 'expo-crypto';
 import { createStore } from 'zustand/vanilla';
+import { ReconnectingSocket } from './ReconnectingSocket';
 
 export type SyncStatus = 'connecting' | 'syncing' | 'online' | 'offline';
 
@@ -28,11 +28,9 @@ export interface SyncSnapshot {
   notice: string | null;
 }
 
-const MAX_BACKOFF_MS = 10_000;
-
 /**
- * Socket wrapper around the shared sync state machine. All contract rules live in
- * `@field-form/shared/sync-state`; this class only moves messages and schedules reconnects.
+ * Connects one layout to the shared sync state machine. All ordering, replay and rejection
+ * rules live in `@field-form/shared`; this class only feeds it messages.
  * `state` lives in memory for now; it survives reconnects but not an app restart.
  */
 export class SyncClient {
@@ -45,18 +43,33 @@ export class SyncClient {
   }));
 
   private state: SyncState<LayoutDoc, Op> = initialState<LayoutDoc, Op>(null);
-  private ws: WebSocket | null = null;
   private ready = false;
-  private attempt = 0;
-  private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private running = false;
+  private readonly socket: ReconnectingSocket;
 
   constructor(
-    private readonly url: string,
+    url: string,
     private readonly layoutId: string,
     private readonly clientId: string,
     private readonly role: Role,
-  ) {}
+  ) {
+    this.socket = new ReconnectingSocket(url, {
+      onOpen: () => this.socket.send({ type: 'hello', layoutId, clientId, role, lastSeq: this.state.lastSeq }),
+      onMessage: (msg) => this.handle(msg),
+      onStatus: (s) => {
+        if (s !== 'open') this.ready = false;
+        this.store.setState({ status: s === 'open' ? 'syncing' : s });
+      },
+    });
+  }
+
+  start(): void {
+    this.socket.start();
+  }
+
+  /** Local state is kept, so a later `start()` resumes from `lastSeq`. */
+  stop(): void {
+    this.socket.stop();
+  }
 
   /** Apply locally and send. Returns an error message if the edit is invalid right now. */
   submit = (op: Op): string | null => {
@@ -67,65 +80,12 @@ export class SyncClient {
       if (e instanceof OpError) return e.message;
       throw e;
     }
-    if (this.ready) this.send({ type: 'submit', ...pending });
+    if (this.ready) this.socket.send({ type: 'submit', ...pending });
     this.publish();
     return null;
   };
 
-  /** Connect and keep reconnecting until `stop()`. Safe to call again after `stop()`. */
-  start(): void {
-    if (this.running) return;
-    this.running = true;
-    this.attempt = 0;
-    this.open();
-  }
-
-  /** Disconnect and stop reconnecting. Local state is kept, so a later `start()` resumes from `lastSeq`. */
-  stop(): void {
-    this.running = false;
-    if (this.retryTimer) clearTimeout(this.retryTimer);
-    this.retryTimer = null;
-    const ws = this.ws;
-    this.ws = null;
-    ws?.close();
-  }
-
-  private open(): void {
-    this.ready = false;
-    this.store.setState({ status: this.attempt === 0 ? 'connecting' : 'offline' });
-    const ws = new WebSocket(this.url);
-    this.ws = ws;
-    ws.onopen = () => {
-      this.store.setState({ status: 'syncing' });
-      this.send({
-        type: 'hello',
-        layoutId: this.layoutId,
-        clientId: this.clientId,
-        role: this.role,
-        lastSeq: this.state.lastSeq,
-      });
-    };
-    ws.onmessage = (e) => this.handle(String(e.data));
-    ws.onclose = () => {
-      if (this.ws !== ws) return;
-      this.ready = false;
-      this.store.setState({ status: 'offline' });
-      if (this.running) this.scheduleReconnect();
-    };
-  }
-
-  private scheduleReconnect(): void {
-    // Exponential backoff with jitter (capped) so many devices don't reconnect in lockstep after an outage.
-    const base = Math.min(MAX_BACKOFF_MS, 500 * 2 ** this.attempt);
-    this.attempt += 1;
-    this.retryTimer = setTimeout(() => this.open(), base / 2 + Math.random() * (base / 2));
-  }
-
-  private handle(raw: string): void {
-    const parsed = ServerMsg.safeParse(JSON.parse(raw));
-    if (!parsed.success) return;
-    const msg = parsed.data;
-
+  private handle(msg: ServerMsg): void {
     switch (msg.type) {
       case 'commit': {
         if (msg.layoutId !== this.layoutId) return;
@@ -134,20 +94,16 @@ export class SyncClient {
           this.state = t.state;
           this.report(t.dropped);
         } catch (e) {
-          if (e instanceof SyncGapError) {
-            this.ws?.close(); // reconnect replays from lastSeq
-            return;
-          }
+          if (e instanceof SyncGapError) return this.socket.reconnect(); // replay from lastSeq
           throw e;
         }
         break;
       }
       case 'ready':
         this.ready = true;
-        this.attempt = 0;
         this.store.setState({ status: 'online' });
         // Resubmit everything still pending, in order. Known opIds are deduplicated by the server.
-        for (const p of this.state.pending) this.send({ type: 'submit', ...p });
+        for (const p of this.state.pending) this.socket.send({ type: 'submit', ...p });
         break;
       case 'reject': {
         const t = receiveReject(this.state, msg, applyOp);
@@ -155,6 +111,8 @@ export class SyncClient {
         this.report(t.dropped);
         break;
       }
+      case 'index':
+        return;
     }
     this.publish();
   }
@@ -172,9 +130,5 @@ export class SyncClient {
       pendingCount: this.state.pending.length,
       lastSeq: this.state.lastSeq,
     });
-  }
-
-  private send(msg: ClientMsg): void {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
   }
 }
