@@ -1,4 +1,4 @@
-// High-contrast field theme (DESIGN.md §4.4): near-black on white, yellow only for active state.
+// High-contrast theme for bright sun: near-black on white, yellow reserved for the active state.
 export const color = {
   ink: '#111111',
   paper: '#FFFFFF',

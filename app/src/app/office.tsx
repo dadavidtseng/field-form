@@ -4,7 +4,7 @@ import { useLayoutSync } from '../sync/useLayoutSync';
 import { StatusBadge } from '../ui/StatusBadge';
 import { color } from '../ui/theme';
 
-// Skeleton: one fixed layout until the shared layout list lands (build step 3).
+// Temporary: one fixed layout until the shared layout list replaces it.
 const DEMO_LAYOUT = 'demo';
 
 export default function OfficeScreen() {

@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { Op } from './ops';
 
-// Wire protocol (DESIGN.md §7). Every message is JSON with a `type` field.
-// The server validates client messages with these schemas (rejection layer 1).
+// Wire protocol between app and sync server. Every message is JSON with a `type` field.
+// Client messages are untrusted: the server validates them with these schemas before
+// anything else, so malformed input is rejected as `invalid` instead of reaching the reducer.
 
 export const SYNC_PORT = 8787;
 

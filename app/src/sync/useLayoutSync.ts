@@ -6,7 +6,7 @@ import { createStore } from 'zustand/vanilla';
 import { SyncClient, type SyncSnapshot } from './SyncClient';
 import { syncUrl } from './serverUrl';
 
-/** One id per app launch; persisted with the offline outbox in P1. */
+/** One id per app launch. Identifies this device's edits in commits. */
 const CLIENT_ID = randomUUID();
 
 const idle = createStore<SyncSnapshot>(() => ({

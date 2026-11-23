@@ -1,6 +1,7 @@
-// Client sync state machine (DESIGN.md §7, "Commit and reconnect contract").
+// Client sync state machine. The server orders every edit; the client shows
+// `confirmed` (server commits) with its own unacknowledged `pending` edits on top.
 // Pure and generic over the document and op types, so it is unit-testable
-// without a socket and reusable when the domain grows in build step 2.
+// without a socket and unchanged as the domain grows.
 
 export type Apply<D, O> = (doc: D, op: O) => D;
 

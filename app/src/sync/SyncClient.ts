@@ -24,7 +24,7 @@ export interface SyncSnapshot {
   status: SyncStatus;
   pendingCount: number;
   lastSeq: number;
-  /** Human-readable explanation of the latest dropped edit; never silent (DESIGN.md §7). */
+  /** Explanation of the latest dropped edit. Always reported, so Dana knows to redo it. */
   notice: string | null;
 }
 
@@ -33,7 +33,7 @@ const MAX_BACKOFF_MS = 10_000;
 /**
  * Socket wrapper around the shared sync state machine. All contract rules live in
  * `@field-form/shared/sync-state`; this class only moves messages and schedules reconnects.
- * Persistence of `state` to expo-sqlite arrives with the offline outbox (P1).
+ * `state` lives in memory for now; it survives reconnects but not an app restart.
  */
 export class SyncClient {
   readonly store = createStore<SyncSnapshot>(() => ({
@@ -105,7 +105,7 @@ export class SyncClient {
   }
 
   private scheduleReconnect(): void {
-    // Exponential backoff with jitter, capped (DESIGN.md §7). NetInfo-triggered retry comes with P1.
+    // Exponential backoff with jitter (capped) so many devices don't reconnect in lockstep after an outage.
     const base = Math.min(MAX_BACKOFF_MS, 500 * 2 ** this.attempt);
     this.attempt += 1;
     this.retryTimer = setTimeout(() => this.open(), base / 2 + Math.random() * (base / 2));

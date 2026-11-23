@@ -29,8 +29,8 @@ interface LayoutCache {
 const toWire = (c: StoredCommit): Commit => ({ type: 'commit', ...c });
 
 /**
- * Transport-independent sync logic (DESIGN.md §7). The WebSocket layer only
- * moves strings in and out, so every contract rule is testable without sockets.
+ * Transport-independent sync logic: validates, orders, persists and broadcasts edits.
+ * The WebSocket layer only moves strings in and out, so every rule is testable without sockets.
  */
 export class Hub {
   private readonly subscribers = new Set<Subscriber>();

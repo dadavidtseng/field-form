@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 /**
- * Where the sync server lives (DESIGN.md §7, "Server discovery").
+ * Where the sync server lives, with zero configuration for reviewers.
  * The server runs on the same machine as Metro, so reuse Metro's host:
  * - physical device: hostUri is the dev machine's LAN IP
  * - Android emulator: localhost means the emulator itself, so map to 10.0.2.2

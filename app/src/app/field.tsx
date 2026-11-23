@@ -6,7 +6,7 @@ import { BigButton } from '../ui/BigButton';
 import { StatusBadge } from '../ui/StatusBadge';
 import { color } from '../ui/theme';
 
-// Skeleton: one fixed layout until the shared layout list lands (build step 3).
+// Temporary: one fixed layout until the shared layout list replaces it.
 const DEMO_LAYOUT = 'demo';
 
 const stamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });

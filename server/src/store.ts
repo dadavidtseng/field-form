@@ -12,7 +12,7 @@ export interface StoredCommit {
   at: number;
 }
 
-/** Storage seam (DESIGN.md §8): swapping SQLite for Postgres means one new implementation of this. */
+/** Storage seam: moving from SQLite to Postgres means one new implementation of this interface. */
 export interface CommitStore {
   since(layoutId: string, afterSeq: number): StoredCommit[];
   byOpId(opId: string): StoredCommit | undefined;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Skeleton domain: just enough to prove the sync pipeline end to end.
-// Walls, features and batches arrive in build step 2 (DESIGN.md §6).
+// Walls, features and batch edits extend this union next.
 
 export const LayoutKind = z.enum(['room', 'deck', 'patio', 'fence', 'other']);
 export type LayoutKind = z.infer<typeof LayoutKind>;

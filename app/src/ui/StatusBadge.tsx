@@ -9,7 +9,7 @@ const label: Record<SyncStatus, string> = {
   offline: '○ Offline',
 };
 
-/** Sync status shown without blocking work (DESIGN.md §4.4). Text + symbol, never colour alone. */
+/** Sync status that never blocks work. Text + symbol, never colour alone, so it reads in bright sun. */
 export function StatusBadge({ status, pending }: { status: SyncStatus; pending: number }) {
   const text = status === 'online' && pending > 0 ? `◐ Pending ${pending}` : label[status];
   const tint = status === 'online' ? (pending > 0 ? color.warn : color.ok) : status === 'offline' ? color.bad : color.muted;

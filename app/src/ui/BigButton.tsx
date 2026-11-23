@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { TOUCH, color } from './theme';
 
-/** Glove-sized primary button (≥ 64 dp, DESIGN.md §4.4). */
+/** Primary button sized for gloved hands (at least 64 dp tall). */
 export function BigButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
