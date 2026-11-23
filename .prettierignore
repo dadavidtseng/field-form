@@ -1,0 +1,8 @@
+node_modules/
+package-lock.json
+.expo/
+dist/
+server/data/
+app/expo-env.d.ts
+# Markdown is hand-formatted (tables, wrapped prose); Prettier would only add churn.
+*.md
