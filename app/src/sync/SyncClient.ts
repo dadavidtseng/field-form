@@ -49,16 +49,14 @@ export class SyncClient {
   private ready = false;
   private attempt = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
-  private disposed = false;
+  private running = false;
 
   constructor(
     private readonly url: string,
     private readonly layoutId: string,
     private readonly clientId: string,
     private readonly role: Role,
-  ) {
-    this.open();
-  }
+  ) {}
 
   /** Apply locally and send. Returns an error message if the edit is invalid right now. */
   submit = (op: Op): string | null => {
@@ -74,10 +72,22 @@ export class SyncClient {
     return null;
   };
 
-  dispose(): void {
-    this.disposed = true;
+  /** Connect and keep reconnecting until `stop()`. Safe to call again after `stop()`. */
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    this.attempt = 0;
+    this.open();
+  }
+
+  /** Disconnect and stop reconnecting. Local state is kept, so a later `start()` resumes from `lastSeq`. */
+  stop(): void {
+    this.running = false;
     if (this.retryTimer) clearTimeout(this.retryTimer);
-    this.ws?.close();
+    this.retryTimer = null;
+    const ws = this.ws;
+    this.ws = null;
+    ws?.close();
   }
 
   private open(): void {
@@ -100,7 +110,7 @@ export class SyncClient {
       if (this.ws !== ws) return;
       this.ready = false;
       this.store.setState({ status: 'offline' });
-      if (!this.disposed) this.scheduleReconnect();
+      if (this.running) this.scheduleReconnect();
     };
   }
 
