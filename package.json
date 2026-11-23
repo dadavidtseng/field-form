@@ -1,0 +1,21 @@
+{
+  "name": "field-form",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "server",
+    "app"
+  ],
+  "engines": {
+    "node": "^22.13.0 || ^24.3.0 || >=26.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently --names server,expo --prefix-colors blue,green --handle-input --default-input-target expo \"npm run dev -w server\" \"npm run start -w app\"",
+    "server": "npm run dev -w server",
+    "test": "npm test -w shared -w server",
+    "typecheck": "npm run typecheck -w shared -w server -w app"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
