@@ -1,0 +1,5 @@
+# Normalise line endings so reviewers on macOS/Linux get LF.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ttf binary
