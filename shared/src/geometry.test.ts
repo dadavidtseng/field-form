@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   SQ_UM_PER_SQ_FT,
   area,
+  bounds,
   closure,
   corners,
   featureFits,
+  hitTest,
   perimeter,
   postPosition,
   wallFeatureSpan,
@@ -92,6 +94,30 @@ describe('geometry', () => {
     const p = postPosition(doc, post)!;
     near(p.x, feet(11));
     near(p.y, feet(4));
+  });
+});
+
+describe('hit testing and bounds', () => {
+  const doc = () => run([{ t: 'feature.add', feature: door('d1', 'w1', feet(4), feet(3)) }], room12x10()) as Layout;
+
+  it('a tap on a door picks the door, not the wall under it', () => {
+    expect(hitTest(doc(), { x: feet(5), y: inches(2) }, inches(6))).toEqual({ kind: 'feature', id: 'd1' });
+  });
+
+  it('a tap on bare wall picks the wall; the closing wall is selectable too', () => {
+    expect(hitTest(doc(), { x: feet(10), y: inches(2) }, inches(6))).toEqual({ kind: 'wall', id: 'w1' });
+    expect(hitTest(doc(), { x: inches(2), y: feet(5) }, inches(6))).toEqual({ kind: 'wall', id: 'wc' });
+  });
+
+  it('a tap in open space hits nothing', () => {
+    expect(hitTest(doc(), { x: feet(6), y: feet(5) }, inches(6))).toBeNull();
+  });
+
+  it('bounds cover the outline', () => {
+    const b = bounds(doc())!;
+    near(b.minX, 0);
+    near(b.maxX, feet(12));
+    near(b.maxY, feet(10));
   });
 });
 

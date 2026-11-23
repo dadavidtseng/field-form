@@ -137,3 +137,60 @@ export function featureFits(layout: Layout, f: Feature): boolean {
   const end = effective(f.offset, f.sketch.offset) + effective(f.width, f.sketch.width);
   return end <= s.length + 1; // 1 µm slack for float rounding
 }
+
+export type Hit = { kind: 'wall'; id: string } | { kind: 'feature'; id: string };
+
+function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+
+/**
+ * What a tap at `p` refers to, within `radius` (world µm; callers convert a glove-sized
+ * screen radius). Features win over the wall they sit on, so a door is selectable.
+ */
+export function hitTest(layout: Layout, p: Pt, radius: number): Hit | null {
+  let best: { hit: Hit; d: number } | null = null;
+  const consider = (hit: Hit, d: number, bias = 0) => {
+    if (d <= radius && (!best || d - bias < best.d)) best = { hit, d: d - bias };
+  };
+  for (const f of Object.values(layout.features)) {
+    if (isWallFeature(f)) {
+      const span = wallFeatureSpan(layout, f);
+      if (span) consider({ kind: 'feature', id: f.id }, distanceToSegment(p, span.a, span.b), radius);
+    } else {
+      const c = postPosition(layout, f);
+      if (c) consider({ kind: 'feature', id: f.id }, dist(p, c), radius);
+    }
+  }
+  for (const s of segments(layout.outline)) consider({ kind: 'wall', id: s.wallId }, distanceToSegment(p, s.a, s.b));
+  return (best as { hit: Hit } | null)?.hit ?? null;
+}
+
+export interface Bounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** Extent of everything drawn (corners and posts), or null for an empty layout. */
+export function bounds(layout: Layout): Bounds | null {
+  const pts = layout.outline.walls.length ? corners(layout.outline) : [];
+  for (const f of Object.values(layout.features)) {
+    if (f.kind === 'post') {
+      const c = postPosition(layout, f);
+      if (c) pts.push(c);
+    }
+  }
+  if (!pts.length) return null;
+  return {
+    minX: Math.min(...pts.map((p) => p.x)),
+    minY: Math.min(...pts.map((p) => p.y)),
+    maxX: Math.max(...pts.map((p) => p.x)),
+    maxY: Math.max(...pts.map((p) => p.y)),
+  };
+}
