@@ -1,0 +1,24 @@
+{
+  "name": "@field-form/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Field Form sync server: server-ordered op log over WebSocket, persisted in SQLite.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@field-form/shared": "*",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.6",
+    "typescript": "~6.0.3",
+    "vitest": "^4.0.0"
+  }
+}
