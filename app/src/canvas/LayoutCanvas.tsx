@@ -1,6 +1,7 @@
-import { UM_PER_INCH, bounds, type Layout, type Pt } from '@field-form/shared';
+import { UM_PER_INCH, bounds, feet, type Layout, type Pt } from '@field-form/shared';
 import {
   Canvas,
+  Circle,
   DashPathEffect,
   Group,
   Line,
@@ -41,14 +42,18 @@ interface Props {
   selectedId?: string | null;
   /** Single tap, in world µm (y up), with the current µm per screen pixel for hit radii. */
   onTap?: (world: Pt, umPerPx: number) => void;
+  /** Corners tapped so far in a sketch that is not committed yet (world µm). */
+  draft?: Pt[];
 }
+
+const EMPTY_FRAME = { minX: -feet(10), minY: -feet(10), maxX: feet(10), maxY: feet(10) };
 
 /**
  * The one renderer both screens share. World geometry is drawn in a transformed group
  * (pan/zoom run on the UI thread, no React re-render per frame); line widths and labels
  * stay a constant size on screen so they read at any zoom.
  */
-export function LayoutCanvas({ layout, selectedId, onTap }: Props) {
+export function LayoutCanvas({ layout, selectedId, onTap, draft }: Props) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const scale = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -57,10 +62,12 @@ export function LayoutCanvas({ layout, selectedId, onTap }: Props) {
   const userMoved = useSharedValue(false);
 
   const scene = useMemo(() => (layout ? buildScene(layout) : null), [layout]);
-  const box = useMemo(() => (layout ? bounds(layout) : null), [layout]);
+  // An empty layout frames a 20' square around the origin, so the first sketch taps have room.
+  const box = useMemo(() => (layout && bounds(layout)) || EMPTY_FRAME, [layout]);
+  const draftIn = useMemo(() => (draft ?? []).map((p) => ({ x: p.x / UM_PER_INCH, y: p.y / UM_PER_INCH })), [draft]);
 
   const fit = useCallback(() => {
-    if (!box || !size.width) return;
+    if (!size.width) return;
     const w = Math.max((box.maxX - box.minX) / UM_PER_INCH, 12);
     const h = Math.max((box.maxY - box.minY) / UM_PER_INCH, 12);
     const s = Math.min((size.width - 2 * FIT_PADDING_PX) / w, (size.height - 2 * FIT_PADDING_PX) / h);
@@ -127,6 +134,8 @@ export function LayoutCanvas({ layout, selectedId, onTap }: Props) {
   const thinWidth = useDerivedValue(() => 2 / scale.get());
   const gapWidth = useDerivedValue(() => (WALL_PX + 3) / scale.get());
   const highlightWidth = useDerivedValue(() => 16 / scale.get());
+  const dotRadius = useDerivedValue(() => 9 / scale.get());
+  const closeRingRadius = useDerivedValue(() => 22 / scale.get());
 
   const onLayout = (e: LayoutChangeEvent) =>
     setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height });
@@ -135,6 +144,27 @@ export function LayoutCanvas({ layout, selectedId, onTap }: Props) {
     <View style={styles.root} onLayout={onLayout}>
       <GestureDetector gesture={gesture}>
         <Canvas style={styles.canvas}>
+          {draftIn.length > 0 && (
+            <Group transform={transform}>
+              {draftIn.length >= 3 && (
+                // Tapping inside this ring closes the shape.
+                <Circle cx={draftIn[0]!.x} cy={draftIn[0]!.y} r={closeRingRadius} color={color.active} opacity={0.5} />
+              )}
+              {draftIn.slice(1).map((p, i) => (
+                <Line
+                  key={`l${i}`}
+                  p1={draftIn[i]!}
+                  p2={p}
+                  color={color.ink}
+                  strokeWidth={wallWidth}
+                  strokeCap="round"
+                />
+              ))}
+              {draftIn.map((p, i) => (
+                <Circle key={`c${i}`} cx={p.x} cy={p.y} r={dotRadius} color={i === 0 ? color.active : color.ink} />
+              ))}
+            </Group>
+          )}
           {scene && (
             <>
               <Group transform={transform}>
