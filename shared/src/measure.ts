@@ -1,5 +1,5 @@
 import { featureNames } from './features';
-import { closure, segments } from './geometry';
+import { SQ_UM_PER_SQ_FT, area, closure, perimeter, segments } from './geometry';
 import type { Dimension, DimensionTarget, Feature, Layout } from './model';
 import { inches, type Um } from './units';
 
@@ -14,6 +14,8 @@ export interface Slot {
   /** What the slot shows until measured (sketch or computed length). */
   estimateUm: Um;
   value: Um | null;
+  /** The stored measurement with its provenance (source, device, time, who), if any. */
+  dim: Dimension | null;
 }
 
 export function targetKey(t: DimensionTarget): string {
@@ -33,15 +35,17 @@ export function measureSlots(layout: Layout): Slot[] {
   const total = segs.length;
   const wallSlots: Slot[] = segs.map((s, i) => {
     const target: DimensionTarget = s.closing ? { kind: 'closing' } : { kind: 'wall', wallId: s.wallId };
-    const value = s.closing
-      ? layout.outline.closingLength.value
-      : (layout.outline.walls.find((w) => w.id === s.wallId)?.length.value ?? null);
+    const dim = s.closing
+      ? layout.outline.closingLength
+      : (layout.outline.walls.find((w) => w.id === s.wallId)?.length ?? null);
+    const value = dim?.value ?? null;
     return {
       target,
       key: targetKey(target),
       label: s.closing ? `Last wall · back to start (${i + 1} of ${total})` : `Wall ${i + 1} of ${total}`,
       estimateUm: Math.round(s.length),
       value,
+      dim,
     };
   });
 
@@ -57,6 +61,7 @@ export function measureSlots(layout: Layout): Slot[] {
         label: `${names[f.id]} · ${FIELD_LABEL[field]}`,
         estimateUm: Math.abs(sketchFor(f, field)),
         value: dim?.value ?? null,
+        dim: dim ?? null,
       };
     }),
   );
@@ -114,4 +119,27 @@ export function closureCheck(layout: Layout): { errorUm: Um; level: ClosureLevel
   const c = closure(layout.outline);
   if (!c || c.error === null) return null;
   return { errorUm: c.error, level: closureLevel(c.error) };
+}
+
+export interface LayoutSummaryNumbers {
+  /** Linear length: fences and trim. Uses measured lengths where taken, sketch estimates otherwise. */
+  perimeterUm: Um;
+  /** Square feet for closed shapes (decks, floors); null for an open line. */
+  areaSqFt: number | null;
+  closure: { errorUm: Um; level: ClosureLevel } | null;
+  measured: number;
+  total: number;
+}
+
+/** What an estimator needs first: size, how trustworthy it is, and what is still missing. */
+export function layoutSummary(layout: Layout): LayoutSummaryNumbers {
+  const slots = measureSlots(layout);
+  const sqUm = area(layout.outline);
+  return {
+    perimeterUm: perimeter(layout.outline),
+    areaSqFt: sqUm === null ? null : sqUm / SQ_UM_PER_SQ_FT,
+    closure: closureCheck(layout),
+    measured: slots.filter((s) => s.value !== null).length,
+    total: slots.length,
+  };
 }

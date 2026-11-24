@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Layout } from './model';
 import { applyOp } from './ops';
-import { closureCheck, closureLevel, measureSlots, nextUnmeasured } from './measure';
+import { closureCheck, closureLevel, layoutSummary, measureSlots, nextUnmeasured } from './measure';
 import { SimulatedTape } from './tape';
 import { room12x10 } from './test-helpers';
 import { feet, inches } from './units';
@@ -52,6 +52,23 @@ describe('closure check', () => {
     const doc = room12x10()!;
     expect(closureCheck(doc)).toBeNull();
     expect(closureCheck(measure(doc, null, feet(10) + inches(0.5)))).toEqual({ errorUm: inches(0.5), level: 'warn' });
+  });
+});
+
+describe('layout summary', () => {
+  it('gives perimeter, area, progress, and keeps provenance on slots', () => {
+    const doc = measure(room12x10()!, 'w1', feet(12));
+    const s = layoutSummary(doc);
+    expect(s.perimeterUm).toBe(feet(44));
+    expect(s.areaSqFt).toBeCloseTo(120, 3);
+    expect(s).toMatchObject({ measured: 1, total: 4, closure: null });
+    expect(measureSlots(doc)[0]!.dim).toMatchObject({ value: feet(12), source: 'tape' });
+  });
+
+  it('an open line has a length but no area', () => {
+    const doc = applyOp(room12x10()!, { t: 'outline.open' }) as Layout;
+    expect(layoutSummary(doc).areaSqFt).toBeNull();
+    expect(layoutSummary(doc).perimeterUm).toBe(feet(34));
   });
 });
 
