@@ -19,10 +19,16 @@ export function Keypad({
   title,
   onSubmit,
   onCancel,
+  fill,
 }: {
   title: string;
   onSubmit: (um: Um) => void;
   onCancel: () => void;
+  /**
+   * Fill the parent (the landscape side column) and share its height between the key rows,
+   * instead of a bottom sheet with fixed-height keys that would not fit a short screen.
+   */
+  fill?: boolean;
 }) {
   const [text, setText] = useState('');
   const parsed = parseLength(text);
@@ -33,7 +39,7 @@ export function Keypad({
   };
 
   return (
-    <View style={styles.sheet}>
+    <View style={[styles.sheet, fill && styles.fill]}>
       <Text style={styles.title}>{title}</Text>
       <View style={styles.display}>
         <Text style={styles.input}>{text || ' '}</Text>
@@ -42,13 +48,13 @@ export function Keypad({
         </Text>
       </View>
       {ROWS.map((row) => (
-        <View key={row.join()} style={styles.row}>
+        <View key={row.join()} style={[styles.row, fill && styles.rowFill]}>
           {row.map((k) => (
             <Key key={k} label={k} onPress={() => press(k)} />
           ))}
         </View>
       ))}
-      <View style={styles.row}>
+      <View style={[styles.row, fill && styles.rowFill]}>
         <Key label="mm" onPress={() => press(' mm')} />
         <Key label="Cancel" onPress={onCancel} />
         <Key label="Save" wide primary disabled={parsed === null} onPress={() => parsed !== null && onSubmit(parsed)} />
@@ -106,10 +112,13 @@ const styles = StyleSheet.create({
   input: { fontSize: 32, fontWeight: '800', color: color.ink },
   preview: { fontSize: 18, color: color.muted },
   bad: { color: color.bad },
-  row: { flexDirection: 'row', gap: 8 },
+  // Keys stretch to their row's height; the row sets the glove-sized minimum.
+  row: { flexDirection: 'row', gap: 8, minHeight: TOUCH },
+  fill: { top: 0 },
+  // Rows share the column's height; keys stay at least 44 dp, the smallest comfortable target.
+  rowFill: { flex: 1, minHeight: 44 },
   key: {
     flex: 1,
-    minHeight: TOUCH,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: color.ink,

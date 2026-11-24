@@ -1,4 +1,5 @@
 import type { WallFeatureKind } from '@field-form/shared';
+import { createContext, useContext } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { color } from '../ui/theme';
 
@@ -23,6 +24,7 @@ export function FeatureBar({
   onPost,
   onRemove,
   onPickField,
+  dense = false,
 }: {
   wallArmed: boolean;
   /** Name of the armed feature ("Door 1"), or null when a wall or nothing is armed. */
@@ -36,7 +38,40 @@ export function FeatureBar({
   onPost: () => void;
   onRemove: () => void;
   onPickField: (key: string) => void;
+  /** Short screens (phone landscape): smaller chips so the controls fit beside the plan. */
+  dense?: boolean;
 }) {
+  return (
+    <DenseContext.Provider value={dense}>
+      <FeatureBarBody
+        wallArmed={wallArmed}
+        featureName={featureName}
+        fields={fields}
+        placingPost={placingPost}
+        misfit={misfit}
+        onAdd={onAdd}
+        onPost={onPost}
+        onRemove={onRemove}
+        onPickField={onPickField}
+      />
+    </DenseContext.Provider>
+  );
+}
+
+/** Lets every chip in the row pick up the dense size without passing it through each call. */
+const DenseContext = createContext(false);
+
+function FeatureBarBody({
+  wallArmed,
+  featureName,
+  fields,
+  placingPost,
+  misfit,
+  onAdd,
+  onPost,
+  onRemove,
+  onPickField,
+}: Omit<Parameters<typeof FeatureBar>[0], 'dense'>) {
   if (placingPost) {
     return (
       <View style={styles.bar}>
@@ -82,6 +117,7 @@ function Chip({
   danger?: boolean;
   active?: boolean;
 }) {
+  const dense = useContext(DenseContext);
   return (
     <Pressable
       accessibilityRole="button"
@@ -89,12 +125,13 @@ function Chip({
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
+        dense && styles.chipDense,
         danger && styles.danger,
         active && styles.active,
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.chipText, danger && styles.dangerText]}>{label}</Text>
+      <Text style={[styles.chipText, dense && styles.chipTextDense, danger && styles.dangerText]}>{label}</Text>
     </Pressable>
   );
 }
@@ -104,6 +141,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   prompt: { fontSize: 18, fontWeight: '800', color: color.ink },
   warn: { fontSize: 16, fontWeight: '800', color: color.bad },
+  chipDense: { minHeight: 44, paddingHorizontal: 12 },
   chip: {
     minHeight: 52,
     paddingHorizontal: 14,
@@ -113,6 +151,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipText: { fontSize: 18, fontWeight: '800', color: color.ink },
+  chipTextDense: { fontSize: 16 },
   danger: { borderColor: color.bad },
   active: { backgroundColor: color.active, borderWidth: 3 },
   dangerText: { color: color.bad },

@@ -27,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayoutCanvas } from '../../canvas/LayoutCanvas';
 import { FeatureBar } from '../../field/FeatureBar';
@@ -39,12 +39,11 @@ import { useLayoutSync } from '../../sync/useLayoutSync';
 import { BigButton } from '../../ui/BigButton';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { StatusBadge } from '../../ui/StatusBadge';
-import { TOUCH, color } from '../../ui/theme';
+import { HEADER_CONTROL, HEADER_RADIUS, breakpoints, color } from '../../ui/theme';
 
 const TAP_RADIUS_PX = 32;
 /** `armedKey` value meaning "deliberately nothing selected". */
 const NOTHING = 'nothing';
-const COMPACT_BELOW_WIDTH = 500;
 
 const KIND_LABEL: Record<LayoutKind, string> = {
   room: 'Room',
@@ -59,8 +58,13 @@ const timeLabel = () => new Date().toLocaleTimeString([], { hour: 'numeric', min
 /** Dana's screen: sketch the outline by tapping corners, then measure what was drawn. */
 export default function FieldLayout() {
   useKeepAwake();
+  const window = useWindowDimensions();
   // Phones get compact header controls so the space's name stays readable.
-  const compact = useWindowDimensions().width < COMPACT_BELOW_WIDTH;
+  const compact = window.width < breakpoints.compactBelow;
+  // Landscape leaves too little height to stack controls under the canvas, so they go beside it.
+  const sideBySide = window.width >= breakpoints.sideBySideFrom && window.width > window.height;
+  // Phone landscape is short: shrink controls so they fit beside the plan (tablets keep full size).
+  const dense = sideBySide && window.height < breakpoints.shortBelow;
   const { id, create } = useLocalSearchParams<{ id: string; create?: LayoutKind }>();
   const sync = useLayoutSync(id, 'field');
   const layout = sync.view;
@@ -218,46 +222,52 @@ export default function FieldLayout() {
   const names = layout ? featureNames(layout) : {};
   const measuredCount = slots.filter((s) => s.value !== null).length;
 
-  return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <ScreenHeader
-        title={layout?.name ?? 'Loading…'}
-        onBack={() => router.back()}
-        right={
-          <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Undo"
-              disabled={!draft.length && !sync.canUndo}
-              onPress={undo}
-              style={({ pressed }) => [
-                styles.undo,
-                !draft.length && !sync.canUndo && styles.disabled,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.undoText}>{compact ? '↶' : '↶ Undo'}</Text>
-            </Pressable>
-            <StatusBadge status={sync.status} pending={sync.pendingCount} compact={compact} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Rename or delete this space"
-              disabled={!layout}
-              onPress={() => setMenuOpen(true)}
-              style={({ pressed }) => [styles.menu, pressed && styles.pressed]}
-            >
-              <Text style={styles.menuText}>⋯</Text>
-            </Pressable>
-          </>
-        }
-      />
-      <LayoutCanvas
-        layout={layout}
-        selectedId={sketching ? null : (armedFeatureId ?? armedWallId)}
-        guide={!sketching && layout && armed ? measureGuide(layout, armed.target) : null}
-        onTap={onTap}
-        draft={draft}
-      />
+  const header = (
+    <ScreenHeader
+      title={layout?.name ?? 'Loading…'}
+      onBack={() => router.back()}
+      right={
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Undo"
+            disabled={!draft.length && !sync.canUndo}
+            onPress={undo}
+            style={({ pressed }) => [
+              styles.undo,
+              !draft.length && !sync.canUndo && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.undoText}>{compact ? '↶' : '↶ Undo'}</Text>
+          </Pressable>
+          <StatusBadge status={sync.status} pending={sync.pendingCount} compact={compact} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Rename or delete this space"
+            disabled={!layout}
+            onPress={() => setMenuOpen(true)}
+            style={({ pressed }) => [styles.menu, pressed && styles.pressed]}
+          >
+            <Text style={styles.menuText}>⋯</Text>
+          </Pressable>
+        </>
+      }
+    />
+  );
+
+  const canvas = (
+    <LayoutCanvas
+      layout={layout}
+      selectedId={sketching ? null : (armedFeatureId ?? armedWallId)}
+      guide={!sketching && layout && armed ? measureGuide(layout, armed.target) : null}
+      onTap={onTap}
+      draft={draft}
+    />
+  );
+
+  const controls = (
+    <>
       {(error || sync.notice) && <Text style={styles.error}>{error ?? sync.notice}</Text>}
       {layout?.archived && (
         <View style={styles.deleted}>
@@ -289,6 +299,7 @@ export default function FieldLayout() {
                 active: s.key === armed?.key,
                 measured: s.value !== null,
               }))}
+              dense={dense}
               onPickField={(key) => {
                 setArmedKey(key);
                 setNextOverride(null);
@@ -305,9 +316,16 @@ export default function FieldLayout() {
               onManual={() => setKeypad('manual')}
               onEditNext={() => setKeypad('next')}
               onToggleError={setRealisticError}
+              dense={dense}
             />
           </>
         ))}
+    </>
+  );
+
+  // Rendered inside the side column in landscape (so they never cover the plan), else over the screen.
+  const overlays = (
+    <>
       {menuOpen && layout && (
         <LayoutMenu
           name={layout.name}
@@ -324,6 +342,7 @@ export default function FieldLayout() {
       )}
       {keypad && armed && (
         <Keypad
+          fill={sideBySide}
           title={keypad === 'manual' ? `Type ${armed.label}` : 'Set the next tape reading'}
           onCancel={() => setKeypad(null)}
           onSubmit={(um) => {
@@ -333,23 +352,60 @@ export default function FieldLayout() {
           }}
         />
       )}
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
+      {header}
+      {sideBySide ? (
+        <View style={styles.row}>
+          <View style={styles.flex}>{canvas}</View>
+          <View style={styles.side}>
+            <ScrollView contentContainerStyle={styles.sideContent} persistentScrollbar>
+              {controls}
+            </ScrollView>
+            {overlays}
+          </View>
+        </View>
+      ) : (
+        <>
+          <View style={styles.flex}>{canvas}</View>
+          {controls}
+          {overlays}
+        </>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.paper },
+  flex: { flex: 1 },
+  row: { flex: 1, flexDirection: 'row' },
+  side: { width: 380, borderLeftWidth: 2, borderLeftColor: color.line },
+  sideContent: { flexGrow: 1, justifyContent: 'flex-end' },
   error: { fontSize: 18, color: color.bad, paddingHorizontal: 16, paddingVertical: 6 },
   undo: {
-    minHeight: TOUCH - 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    minHeight: HEADER_CONTROL,
+    minWidth: HEADER_CONTROL,
+    paddingHorizontal: 12,
+    borderRadius: HEADER_RADIUS,
     borderWidth: 2,
     borderColor: color.ink,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   undoText: { fontSize: 18, fontWeight: '800', color: color.ink },
-  menu: { width: TOUCH - 8, height: TOUCH - 8, justifyContent: 'center', alignItems: 'center' },
+  menu: {
+    minWidth: HEADER_CONTROL,
+    minHeight: HEADER_CONTROL,
+    borderRadius: HEADER_RADIUS,
+    borderWidth: 2,
+    borderColor: color.ink,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   menuText: { fontSize: 32, fontWeight: '900', color: color.ink },
   deleted: { padding: 16, gap: 12, borderTopWidth: 3, borderTopColor: color.bad },
   deletedText: { fontSize: 20, fontWeight: '800', color: color.bad },

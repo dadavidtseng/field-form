@@ -24,6 +24,7 @@ export function MeasurePanel({
   onManual,
   onEditNext,
   onToggleError,
+  dense,
 }: {
   slot: Slot | null;
   measuredCount: number;
@@ -35,14 +36,16 @@ export function MeasurePanel({
   onManual: () => void;
   onEditNext: () => void;
   onToggleError: (v: boolean) => void;
+  /** Short screens (phone landscape): smaller type and buttons so the panel fits beside the plan. */
+  dense?: boolean;
 }) {
   return (
-    <View style={styles.panel}>
+    <View style={[styles.panel, dense && styles.panelDense]}>
       <View style={styles.info}>
         {slot ? (
           <>
             <Text style={styles.armed}>{slot.label}</Text>
-            <Text style={styles.value}>
+            <Text style={[styles.value, dense && styles.valueDense]}>
               {slot.value !== null ? formatFeetInches(slot.value) : `~${formatFeetInches(slot.estimateUm)}`}
             </Text>
             <Text style={styles.meta}>
@@ -82,7 +85,12 @@ export function MeasurePanel({
           accessibilityLabel="Tape reading"
           disabled={!slot}
           onPress={onTape}
-          style={({ pressed }) => [styles.tape, !slot && styles.disabled, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.tape,
+            dense && styles.tapeDense,
+            !slot && styles.disabled,
+            pressed && styles.pressed,
+          ]}
         >
           <Text style={styles.tapeText}>TAPE</Text>
         </Pressable>
@@ -90,7 +98,12 @@ export function MeasurePanel({
           accessibilityRole="button"
           disabled={!slot}
           onPress={onManual}
-          style={({ pressed }) => [styles.manual, !slot && styles.disabled, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.manual,
+            dense && styles.manualDense,
+            !slot && styles.disabled,
+            pressed && styles.pressed,
+          ]}
         >
           <Text style={styles.manualText}>Type</Text>
         </Pressable>
@@ -138,6 +151,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   manualText: { fontSize: 20, fontWeight: '800', color: color.ink },
+  panelDense: { paddingVertical: 8 },
+  valueDense: { fontSize: 26 },
+  tapeDense: { width: 84, height: 84, borderRadius: 42 },
+  manualDense: { minHeight: 48, width: 84 },
   disabled: { opacity: 0.35 },
   pressed: { opacity: 0.6 },
 });
