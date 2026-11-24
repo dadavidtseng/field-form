@@ -19,11 +19,24 @@ npm run dev
 
 `npm run dev` starts the sync server (port **8787**) and the Expo dev server together. When the QR code appears:
 
-1. On each device, scan the QR code with Expo Go (Android) or the Camera app (iOS). On an Android emulator, press `a` in the terminal instead.
+1. On each device, scan the QR code with Expo Go (Android) or the Camera app (iOS). On emulators, press `shift+a` in the terminal instead and pick each one in turn (see below).
 2. Choose **Field** on one device and **Office** on the other.
 3. On the field device, tap **+ New space**. It appears on the office device straight away, and with **Follow field** on, the office device opens it automatically.
 
 The app finds the sync server on its own: it uses the same computer that serves the app, and on an Android emulator it uses `10.0.2.2`.
+
+<details>
+<summary><strong>No devices? Use a phone and a tablet emulator</strong></summary>
+
+Creating emulators for the first time downloads system images and can take well over 10 minutes. A real phone is quicker if you have one.
+
+- **Android (Windows, macOS, Linux):** in Android Studio's **Device Manager**, create a phone (e.g. Pixel 8) and a tablet (e.g. Pixel Tablet) with a recent system image. See [Expo's emulator guide](https://docs.expo.dev/workflow/android-studio-emulator/).
+- **Open the app on each:** in the Expo terminal, press `shift+a` and pick a device, then do it again for the other one. Plain `a` opens only one device. Expo Go installs itself on the emulator.
+- **iOS Simulator (macOS only, untested):** press `shift+i` and pick an iPhone, then an iPad. See [Expo's simulator guide](https://docs.expo.dev/workflow/ios-simulator/).
+
+Emulators need no Wi-Fi or firewall setup.
+
+</details>
 
 ## Try it
 
