@@ -92,7 +92,16 @@ export const Index = z.object({
   layouts: z.array(LayoutSummary),
 });
 
-export const ServerMsg = z.discriminatedUnion('type', [Commit, Ready, Reject, Index]);
+/** Who has this space open right now, by role. Sent to everyone on the space when it changes. */
+export const Presence = z.object({
+  type: z.literal('presence'),
+  layoutId: Id,
+  field: z.number().int().nonnegative(),
+  office: z.number().int().nonnegative(),
+});
+export type Presence = z.infer<typeof Presence>;
+
+export const ServerMsg = z.discriminatedUnion('type', [Commit, Ready, Reject, Index, Presence]);
 export type ServerMsg = z.infer<typeof ServerMsg>;
 
 /** Rejection layer 2: which roles may send which ops. */

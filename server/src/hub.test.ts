@@ -13,7 +13,7 @@ function client(hub: Hub) {
   };
 }
 
-const hello = (role: 'field' | 'office', lastSeq = 0, clientId = role) =>
+const hello = (role: 'field' | 'office', lastSeq = 0, clientId: string = role) =>
   ({ type: 'hello', layoutId: 'L1', clientId, role, lastSeq }) as const;
 const create = { t: 'layout.create', name: 'Kitchen', kind: 'room' } as const;
 
@@ -71,6 +71,31 @@ describe('Hub layout index', () => {
     expect(ids()).toEqual([]);
     dana.send({ type: 'submit', opId: 'op3', op: { t: 'layout.archive', archived: false } });
     expect(ids()).toEqual(['L1']);
+  });
+});
+
+describe('Hub presence (many-to-many)', () => {
+  it('two field devices and an office all see the counts, and every commit', () => {
+    const hub = new Hub(openSqliteStore(':memory:'));
+    const dana = client(hub);
+    const sam = client(hub);
+    const marcus = client(hub);
+    dana.send(hello('field', 0, 'dana'));
+    sam.send(hello('field', 0, 'sam'));
+    marcus.send(hello('office', 0, 'marcus'));
+    const lastPresence = (c: ReturnType<typeof client>) => {
+      const p = c.inbox.filter((m) => m.type === 'presence');
+      return p[p.length - 1];
+    };
+    for (const c of [dana, sam, marcus]) expect(lastPresence(c)).toMatchObject({ field: 2, office: 1 });
+
+    dana.send({ type: 'submit', opId: 'op1', op: create });
+    for (const c of [dana, sam, marcus])
+      expect(c.inbox.some((m) => m.type === 'commit' && m.opId === 'op1')).toBe(true);
+
+    marcus.close();
+    expect(lastPresence(dana)).toMatchObject({ field: 2, office: 0 });
+    expect(lastPresence(sam)).toMatchObject({ field: 2, office: 0 });
   });
 });
 
@@ -132,7 +157,7 @@ describe('Hub contract', () => {
 
     const late = client(new Hub(store)); // fresh process, same database
     late.send(hello('office', 1));
-    expect(late.inbox.map((m) => m.type)).toEqual(['commit', 'ready']);
+    expect(late.inbox.map((m) => m.type)).toEqual(['commit', 'ready', 'presence']);
     expect(late.inbox[0]).toMatchObject({ seq: 2, opId: 'op2' });
     expect(late.inbox[1]).toMatchObject({ headSeq: 2 });
   });

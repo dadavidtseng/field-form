@@ -58,6 +58,7 @@ export class Hub {
       if (!sub) return;
       this.subscribers.delete(sub);
       if (sub.role === 'field') this.broadcastIndex(); // "live" may have changed
+      this.broadcastPresence(sub.layoutId);
       sub = null;
     };
 
@@ -96,6 +97,7 @@ export class Hub {
           for (const c of missed) send(toWire(c));
           send({ type: 'ready', layoutId: msg.layoutId, headSeq: this.layout(msg.layoutId).seq });
           if (msg.role === 'field') this.broadcastIndex();
+          this.broadcastPresence(msg.layoutId);
           this.log(`hello ${msg.role} ${msg.clientId} layout=${msg.layoutId} replayed=${missed.length}`);
           return;
         }
@@ -163,6 +165,18 @@ export class Hub {
     }
     layouts.sort((a, b) => b.updatedAt - a.updatedAt);
     return { type: 'index', layouts };
+  }
+
+  /** Tell everyone on a space how many field and office devices have it open (any number of each). */
+  private broadcastPresence(layoutId: string): void {
+    const here = [...this.subscribers].filter((s) => s.layoutId === layoutId);
+    const msg: ServerMsg = {
+      type: 'presence',
+      layoutId,
+      field: here.filter((s) => s.role === 'field').length,
+      office: here.filter((s) => s.role === 'office').length,
+    };
+    for (const s of here) s.send(msg);
   }
 
   private broadcastIndex(): void {
