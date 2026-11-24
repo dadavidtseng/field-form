@@ -5,6 +5,7 @@ import {
   DashPathEffect,
   Group,
   Line,
+  Path,
   Rect,
   Skia,
   Text,
@@ -40,6 +41,8 @@ interface Props {
   layout: Layout | null;
   /** Id of the wall or feature to highlight. */
   selectedId?: string | null;
+  /** Walls/features that just changed remotely; highlighted briefly so the change is noticed. */
+  flashIds?: ReadonlySet<string>;
   /** Single tap, in world µm (y up), with the current µm per screen pixel for hit radii. */
   onTap?: (world: Pt, umPerPx: number) => void;
   /** Corners tapped so far in a sketch that is not committed yet (world µm). */
@@ -55,7 +58,8 @@ const EMPTY_FRAME = { minX: -feet(10), minY: -feet(10), maxX: feet(10), maxY: fe
  * (pan/zoom run on the UI thread, no React re-render per frame); line widths and labels
  * stay a constant size on screen so they read at any zoom.
  */
-export function LayoutCanvas({ layout, selectedId, onTap, draft, guide }: Props) {
+export function LayoutCanvas({ layout, selectedId, flashIds, onTap, draft, guide }: Props) {
+  const highlighted = (id: string) => id === selectedId || !!flashIds?.has(id);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const scale = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -172,7 +176,7 @@ export function LayoutCanvas({ layout, selectedId, onTap, draft, guide }: Props)
               <Group transform={transform}>
                 {scene.walls.map((w) => (
                   <Group key={w.id}>
-                    {w.id === selectedId && (
+                    {highlighted(w.id) && (
                       <Line p1={w.a} p2={w.b} color={color.active} strokeWidth={highlightWidth} strokeCap="round" />
                     )}
                     <Line
@@ -190,7 +194,7 @@ export function LayoutCanvas({ layout, selectedId, onTap, draft, guide }: Props)
                   <FeatureShape
                     key={f.id}
                     f={f}
-                    selected={f.id === selectedId}
+                    selected={highlighted(f.id)}
                     widths={{ thin: thinWidth, gap: gapWidth, highlight: highlightWidth }}
                   />
                 ))}
@@ -215,6 +219,7 @@ interface Widths {
 /** Plan symbols: a gap in the wall, plus a door leaf, a window pane line, or step treads. */
 function FeatureShape({ f, selected, widths }: { f: FeatureMark; selected: boolean; widths: Widths }) {
   if (f.kind === 'post') {
+    // Structural post: a filled square, the standard plan symbol.
     const half = f.size / 2;
     return (
       <Group>
@@ -225,36 +230,80 @@ function FeatureShape({ f, selected, widths }: { f: FeatureMark; selected: boole
       </Group>
     );
   }
-  const len = Math.hypot(f.b.x - f.a.x, f.b.y - f.a.y);
-  const along = { x: (f.b.x - f.a.x) / (len || 1), y: (f.b.y - f.a.y) / (len || 1) };
+
+  const len = Math.hypot(f.b.x - f.a.x, f.b.y - f.a.y) || 1;
+  const along = { x: (f.b.x - f.a.x) / len, y: (f.b.y - f.a.y) / len };
+  const n = f.inward;
+  const at = (p: Pt, d: Pt, k: number): Pt => ({ x: p.x + d.x * k, y: p.y + d.y * k });
+  const ink = { color: color.ink, strokeWidth: widths.thin } as const;
+  // Jambs: short ticks across the wall at both edges of the opening.
+  const jambs = (
+    <>
+      <Line p1={at(f.a, n, -JAMB_IN)} p2={at(f.a, n, JAMB_IN)} {...ink} />
+      <Line p1={at(f.b, n, -JAMB_IN)} p2={at(f.b, n, JAMB_IN)} {...ink} />
+    </>
+  );
+
   return (
     <Group>
       {selected && <Line p1={f.a} p2={f.b} color={color.active} strokeWidth={widths.highlight} strokeCap="round" />}
       <Line p1={f.a} p2={f.b} color={color.paper} strokeWidth={widths.gap} />
       {f.kind === 'door' && (
-        <Line
-          p1={f.a}
-          p2={{ x: f.a.x + f.inward.x * len, y: f.a.y + f.inward.y * len }}
-          color={color.ink}
-          strokeWidth={widths.thin}
-        />
+        <>
+          {jambs}
+          {/* Leaf drawn open at 90° from the hinge, plus its swing back to the other jamb. */}
+          <Line p1={f.a} p2={at(f.a, n, len)} {...ink} />
+          <Path path={swingArc(f.a, n, along, len)} style="stroke" {...ink} />
+        </>
       )}
-      {f.kind === 'window' && <Line p1={f.a} p2={f.b} color={color.ink} strokeWidth={widths.thin} />}
-      {f.kind === 'step' &&
-        [0.25, 0.5, 0.75].map((t) => {
-          const base = { x: f.a.x + along.x * len * t, y: f.a.y + along.y * len * t };
-          return (
-            <Line
-              key={t}
-              p1={base}
-              p2={{ x: base.x - f.inward.x * 10, y: base.y - f.inward.y * 10 }}
-              color={color.ink}
-              strokeWidth={widths.thin}
-            />
-          );
-        })}
+      {f.kind === 'window' && (
+        <>
+          {jambs}
+          {/* Both wall faces and the glass. */}
+          {[-WINDOW_FACE_IN, 0, WINDOW_FACE_IN].map((k) => (
+            <Line key={k} p1={at(f.a, n, k)} p2={at(f.b, n, k)} {...ink} />
+          ))}
+        </>
+      )}
+      {f.kind === 'opening' && jambs}
+      {f.kind === 'step' && (
+        <>
+          {/* A landing off the wall (outside) with treads parallel to it. */}
+          <Path path={stepOutline(f.a, f.b, n)} style="stroke" {...ink} />
+          {[1 / 3, 2 / 3].map((k) => (
+            <Line key={k} p1={at(f.a, n, -STEP_DEPTH_IN * k)} p2={at(f.b, n, -STEP_DEPTH_IN * k)} {...ink} />
+          ))}
+        </>
+      )}
     </Group>
   );
+}
+
+const JAMB_IN = 4;
+const WINDOW_FACE_IN = 2.5;
+const STEP_DEPTH_IN = 12;
+
+/** Quarter circle from the open leaf's tip to the closing jamb, centred on the hinge. */
+function swingArc(hinge: Pt, inward: Pt, along: Pt, radius: number) {
+  const b = Skia.PathBuilder.Make();
+  for (let i = 0; i <= 16; i++) {
+    const t = (i / 16) * (Math.PI / 2);
+    const x = hinge.x + (Math.cos(t) * inward.x + Math.sin(t) * along.x) * radius;
+    const y = hinge.y + (Math.cos(t) * inward.y + Math.sin(t) * along.y) * radius;
+    if (i === 0) b.moveTo(x, y);
+    else b.lineTo(x, y);
+  }
+  return b.build();
+}
+
+function stepOutline(a: Pt, b: Pt, inward: Pt) {
+  const out = { x: -inward.x * STEP_DEPTH_IN, y: -inward.y * STEP_DEPTH_IN };
+  return Skia.PathBuilder.Make()
+    .moveTo(a.x, a.y)
+    .lineTo(a.x + out.x, a.y + out.y)
+    .lineTo(b.x + out.x, b.y + out.y)
+    .lineTo(b.x, b.y)
+    .build();
 }
 
 const LABEL_GAP_PX = 10;
