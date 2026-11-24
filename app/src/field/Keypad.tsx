@@ -40,10 +40,13 @@ export function Keypad({
 
   return (
     <View style={[styles.sheet, fill && styles.fill]}>
-      <Text style={styles.title}>{title}</Text>
-      <View style={styles.display}>
-        <Text style={styles.input}>{text || ' '}</Text>
-        <Text style={[styles.preview, !parsed && text ? styles.bad : null]}>
+      {!fill && <Text style={styles.title}>{title}</Text>}
+      {/* Filling a short landscape column: the title becomes a caption and the input and its
+          reading share one line, leaving the height for the keys. */}
+      <View style={[styles.display, fill && styles.displayFill]}>
+        {fill && <Text style={styles.caption}>{title}</Text>}
+        <Text style={[styles.input, fill && styles.inputFill]}>{text || ' '}</Text>
+        <Text style={[styles.preview, fill && styles.previewFill, !parsed && text ? styles.bad : null]}>
           {text ? (parsed !== null ? `= ${formatFeetInches(parsed)}` : "Can't read that yet") : 'e.g. 12\' 4-3/8"'}
         </Text>
       </View>
@@ -114,9 +117,19 @@ const styles = StyleSheet.create({
   bad: { color: color.bad },
   // Keys stretch to their row's height; the row sets the glove-sized minimum.
   row: { flexDirection: 'row', gap: 8, minHeight: TOUCH },
-  fill: { top: 0 },
-  // Rows share the column's height; keys stay at least 44 dp, the smallest comfortable target.
-  rowFill: { flex: 1, minHeight: 44 },
+  fill: { top: 0, padding: 8, gap: 6 },
+  displayFill: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    columnGap: 10,
+    paddingVertical: 4,
+  },
+  caption: { width: '100%', fontSize: 14, fontWeight: '700', color: color.muted },
+  inputFill: { fontSize: 24 },
+  previewFill: { fontSize: 15 },
+  // Rows share what height is left (about 48 dp each on a landscape phone), never below 36 dp.
+  rowFill: { flex: 1, minHeight: 36, gap: 6 },
   key: {
     flex: 1,
     borderRadius: 10,
