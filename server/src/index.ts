@@ -29,6 +29,11 @@ wss.on('connection', (ws) => {
 
 http.listen(port, '0.0.0.0', () => {
   log(`listening on ws://0.0.0.0:${port}  (db: ${dbPath})`);
+  if (process.env.IN_CONTAINER) {
+    // Interface addresses inside a container are not reachable from phones; the host's are.
+    log(`  in a container: devices connect to this computer's LAN IP on port ${port}`);
+    return;
+  }
   const lan = Object.values(networkInterfaces())
     .flat()
     .filter((i) => i && i.family === 'IPv4' && !i.internal)
@@ -36,3 +41,14 @@ http.listen(port, '0.0.0.0', () => {
   for (const ip of lan) log(`  physical devices on this network: ws://${ip}:${port}`);
   log(`  Android emulator: ws://10.0.2.2:${port}`);
 });
+
+// As PID 1 in a container, Node ignores SIGTERM unless handled; close cleanly so `docker stop`
+// does not wait 10 s and then kill the process mid-write.
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    log(`${signal}: shutting down`);
+    wss.close();
+    http.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 2000).unref();
+  });
+}
