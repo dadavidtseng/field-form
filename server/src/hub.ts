@@ -148,9 +148,18 @@ export class Hub {
     const layouts: LayoutSummary[] = [];
     for (const id of this.store.layoutIds()) {
       const { doc, updatedAt } = this.layout(id);
-      if (!doc) continue;
+      if (!doc || doc.archived) continue; // deleted layouts leave every list
       const live = [...this.subscribers].some((s) => s.layoutId === id && s.role === 'field');
-      layouts.push({ id, name: doc.name, kind: doc.kind, updatedAt, walls: doc.outline.walls.length, live });
+      layouts.push({
+        id,
+        name: doc.name,
+        kind: doc.kind,
+        updatedAt,
+        // Count what Dana sees: the drawn walls plus the closing wall back to the start.
+        walls: doc.outline.walls.length + (doc.outline.closingWallId ? 1 : 0),
+        closed: doc.outline.closingWallId !== null,
+        live,
+      });
     }
     layouts.sort((a, b) => b.updatedAt - a.updatedAt);
     return { type: 'index', layouts };

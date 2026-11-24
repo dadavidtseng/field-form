@@ -21,6 +21,7 @@ const Name = z.string().trim().min(1).max(120);
 const baseOps = [
   z.object({ t: z.literal('layout.create'), name: Name, kind: LayoutKind }),
   z.object({ t: z.literal('layout.rename'), name: Name }),
+  z.object({ t: z.literal('layout.archive'), archived: z.boolean() }),
   z.object({ t: z.literal('wall.add'), wall: Wall, index: z.number().int().nonnegative().optional() }),
   z.object({
     t: z.literal('wall.update'),
@@ -94,6 +95,7 @@ function applyBase(doc: LayoutDoc, op: BaseOp): BaseApplied {
       doc: {
         name: op.name,
         kind: op.kind,
+        archived: false,
         outline: { walls: [], closingWallId: null, closingLength: EMPTY },
         features: {},
       },
@@ -106,6 +108,12 @@ function applyBase(doc: LayoutDoc, op: BaseOp): BaseApplied {
   switch (op.t) {
     case 'layout.rename':
       return { doc: { ...doc, name: op.name }, inverse: [{ t: 'layout.rename', name: doc.name }] };
+
+    case 'layout.archive':
+      return {
+        doc: { ...doc, archived: op.archived },
+        inverse: [{ t: 'layout.archive', archived: doc.archived ?? false }],
+      };
 
     case 'wall.add': {
       if (hasWall(doc, op.wall.id)) throw new OpError(`Wall ${op.wall.id} already exists`);

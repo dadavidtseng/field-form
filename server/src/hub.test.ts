@@ -34,8 +34,43 @@ describe('Hub layout index', () => {
     dana.send({ type: 'submit', opId: 'op1', op: create });
     expect(lastIndex()).toMatchObject([{ id: 'L1', name: 'Kitchen', kind: 'room', live: true, walls: 0 }]);
 
+    // A closed 3-wall sketch is a 4-wall shape: the closing wall counts too.
+    const wall = (id: string, turnDeg: number) => ({ id, turnDeg, length: { value: null }, sketchUm: 1_000_000 });
+    dana.send({
+      type: 'submit',
+      opId: 'op2',
+      op: {
+        t: 'batch',
+        ops: [
+          { t: 'wall.add', wall: wall('a', 0) },
+          { t: 'wall.add', wall: wall('b', 90) },
+          { t: 'wall.add', wall: wall('c', 90) },
+          { t: 'outline.close', closingWallId: 'd' },
+        ],
+      },
+    });
+    expect(lastIndex()).toMatchObject([{ id: 'L1', walls: 4, closed: true }]);
+
     dana.close();
     expect(lastIndex()).toMatchObject([{ id: 'L1', live: false }]);
+  });
+
+  it('a deleted layout leaves the list, and comes back when the delete is undone', () => {
+    const hub = new Hub(openSqliteStore(':memory:'));
+    const marcus = client(hub);
+    marcus.send({ type: 'watchIndex', clientId: 'm', role: 'office' });
+    const ids = () => {
+      const msgs = marcus.inbox.filter((m) => m.type === 'index');
+      const last = msgs[msgs.length - 1];
+      return last?.type === 'index' ? last.layouts.map((l) => l.id) : [];
+    };
+    const dana = client(hub);
+    dana.send(hello('field'));
+    dana.send({ type: 'submit', opId: 'op1', op: create });
+    dana.send({ type: 'submit', opId: 'op2', op: { t: 'layout.archive', archived: true } });
+    expect(ids()).toEqual([]);
+    dana.send({ type: 'submit', opId: 'op3', op: { t: 'layout.archive', archived: false } });
+    expect(ids()).toEqual(['L1']);
   });
 });
 

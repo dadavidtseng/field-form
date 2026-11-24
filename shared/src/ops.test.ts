@@ -19,6 +19,7 @@ describe('reducer: every op inverts', () => {
 
   it.each<[string, () => Layout, Op]>([
     ['rename', layout, { t: 'layout.rename', name: 'Pantry' }],
+    ['archive (soft delete)', layout, { t: 'layout.archive', archived: true }],
     ['wall.add', layout, { t: 'wall.add', wall: wall('w9', 45, feet(3)), index: 1 }],
     ['wall.update', layout, { t: 'wall.update', id: 'w2', patch: { turnDeg: 45 } }],
     ['wall.remove', withDoor, { t: 'wall.remove', id: 'w1' }],

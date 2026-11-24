@@ -100,6 +100,8 @@ export const DETAIL_FIELDS: ReadonlySet<string> = new Set(['size']);
 export interface Layout {
   name: string;
   kind: LayoutKind;
+  /** Deleted from the field. Soft: the layout and its history stay, and the delete can be undone. */
+  archived?: boolean;
   outline: Outline;
   features: Record<string, Feature>;
 }

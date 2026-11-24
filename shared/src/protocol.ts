@@ -79,6 +79,8 @@ export const LayoutSummary = z.object({
   kind: LayoutKind,
   updatedAt: z.number(),
   walls: z.number().int().nonnegative(),
+  /** Closed shape (has an area) vs open line such as a fence (has a length). */
+  closed: z.boolean(),
   /** A field device has this layout open right now. */
   live: z.boolean(),
 });
