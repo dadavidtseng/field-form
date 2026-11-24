@@ -49,6 +49,8 @@ interface Props {
   draft?: Pt[];
   /** The distance Dana is about to measure, drawn as a dimension line from the yellow corner. */
   guide?: Guide | null;
+  /** Open-comment badges (world µm) so both roles can see where questions are. */
+  pins?: { key: string; at: Pt; count: number }[];
 }
 
 const EMPTY_FRAME = { minX: -feet(10), minY: -feet(10), maxX: feet(10), maxY: feet(10) };
@@ -58,7 +60,7 @@ const EMPTY_FRAME = { minX: -feet(10), minY: -feet(10), maxX: feet(10), maxY: fe
  * (pan/zoom run on the UI thread, no React re-render per frame); line widths and labels
  * stay a constant size on screen so they read at any zoom.
  */
-export function LayoutCanvas({ layout, selectedId, flashIds, onTap, draft, guide }: Props) {
+export function LayoutCanvas({ layout, selectedId, flashIds, onTap, draft, guide, pins }: Props) {
   const highlighted = (id: string) => id === selectedId || !!flashIds?.has(id);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const scale = useSharedValue(1);
@@ -200,6 +202,7 @@ export function LayoutCanvas({ layout, selectedId, flashIds, onTap, draft, guide
                 ))}
               </Group>
               {guide && <GuideShape guide={guide} scale={scale} tx={tx} ty={ty} />}
+              {font && pins?.map((p) => <PinBadge key={p.key} pin={p} font={font} scale={scale} tx={tx} ty={ty} />)}
               {font &&
                 scene.labels.map((l) => <WallLabel key={l.key} label={l} font={font} scale={scale} tx={tx} ty={ty} />)}
             </>
@@ -392,6 +395,40 @@ function GuideShape({
       <Line p1={a} p2={b} color={color.guide} strokeWidth={5} strokeCap="round" />
       <Circle cx={aX} cy={aY} r={8} color={color.guide} />
       <Circle cx={bX} cy={bY} r={8} color={color.guide} />
+    </Group>
+  );
+}
+
+const PIN_RADIUS_PX = 14;
+const PIN_OFFSET_PX = 18;
+
+/** An open-comment badge with its count, offset up-right of the element so it never hides it. */
+function PinBadge({
+  pin,
+  font,
+  scale,
+  tx,
+  ty,
+}: {
+  pin: { at: Pt; count: number };
+  font: SkFont;
+  scale: SharedValue<number>;
+  tx: SharedValue<number>;
+  ty: SharedValue<number>;
+}) {
+  const xIn = pin.at.x / UM_PER_INCH;
+  const yIn = pin.at.y / UM_PER_INCH;
+  const label = pin.count > 9 ? '9+' : String(pin.count);
+  const width = useMemo(() => font.measureText(label).width, [font, label]);
+  const transform = useDerivedValue(() => [
+    { translateX: xIn * scale.get() + tx.get() + PIN_OFFSET_PX },
+    { translateY: -yIn * scale.get() + ty.get() - PIN_OFFSET_PX },
+  ]);
+  return (
+    <Group transform={transform}>
+      <Circle cx={0} cy={0} r={PIN_RADIUS_PX} color={color.warn} />
+      <Circle cx={0} cy={0} r={PIN_RADIUS_PX} color={color.ink} style="stroke" strokeWidth={2} />
+      <Text x={-width / 2} y={6} text={label} font={font} color={color.paper} />
     </Group>
   );
 }
