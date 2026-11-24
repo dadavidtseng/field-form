@@ -43,6 +43,20 @@ export function initialState<D, O>(doc: D): SyncState<D, O> {
   return { confirmed: doc, lastSeq: 0, pending: [], view: doc };
 }
 
+/**
+ * Rebuild the state saved on the device (after an app restart): the confirmed document, its
+ * `lastSeq`, and the edits not yet acknowledged. The view is recomputed, never trusted from
+ * storage, and any pending edit that no longer applies is dropped and reported.
+ */
+export function restoreState<D, O>(
+  confirmed: D,
+  lastSeq: number,
+  pending: Pending<O>[],
+  apply: Apply<D, O>,
+): Transition<D, O> {
+  return rebuild({ confirmed, lastSeq, pending, view: confirmed }, apply);
+}
+
 /** Apply a new local op optimistically. Throws (and changes nothing) if it fails on the current view. */
 export function submitLocal<D, O>(s: SyncState<D, O>, p: Pending<O>, apply: Apply<D, O>): SyncState<D, O> {
   const view = apply(s.view, p.op);

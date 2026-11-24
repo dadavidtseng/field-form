@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { LayoutDoc } from './model';
 import { applyOp, type Op } from './ops';
-import { SyncGapError, initialState, receiveCommit, receiveReject, submitLocal, type SyncState } from './sync-state';
+import {
+  SyncGapError,
+  initialState,
+  receiveCommit,
+  receiveReject,
+  restoreState,
+  submitLocal,
+  type SyncState,
+} from './sync-state';
 
 const create: Op = { t: 'layout.create', name: 'Kitchen', kind: 'room' };
 const rename: Op = { t: 'layout.rename', name: 'Kitchen 2' };
@@ -52,6 +60,28 @@ describe('sync state machine', () => {
     expect(t.state.view).toBeNull();
     expect(t.dropped.map((d) => d.opId)).toEqual(['a', 'b']);
     expect(t.dropped[1]?.reason).toMatch(/does not exist/);
+  });
+
+  it('app restart: the saved parts restore the same view, and replay still clears pending', () => {
+    let s = receiveCommit(start(), { seq: 1, opId: 'x', op: create }, applyOp).state;
+    s = submitLocal(s, { opId: 'a', op: rename }, applyOp); // edited offline, then the app was killed
+    const saved = JSON.parse(JSON.stringify({ confirmed: s.confirmed, lastSeq: s.lastSeq, pending: s.pending }));
+
+    const restored = restoreState<LayoutDoc, Op>(saved.confirmed, saved.lastSeq, saved.pending, applyOp);
+    expect(restored.dropped).toEqual([]);
+    expect(restored.state.view).toEqual(s.view);
+    expect(restored.state.pending).toHaveLength(1);
+
+    // Back online: the resubmitted edit commits and leaves pending exactly once.
+    const after = receiveCommit(restored.state, { seq: 2, opId: 'a', op: rename }, applyOp).state;
+    expect(after.pending).toHaveLength(0);
+    expect(after.view?.name).toBe('Kitchen 2');
+  });
+
+  it('restore drops a saved pending edit that no longer applies, with a reason', () => {
+    const restored = restoreState<LayoutDoc, Op>(null, 0, [{ opId: 'a', op: rename }], applyOp);
+    expect(restored.state.pending).toHaveLength(0);
+    expect(restored.dropped[0]?.reason).toMatch(/does not exist/);
   });
 
   it('a gap in seq forces a resync instead of silently diverging', () => {
