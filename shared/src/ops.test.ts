@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { closure } from './geometry';
-import type { Layout } from './model';
+import type { CommentTarget, Layout } from './model';
 import { OpError, applyOp, applyWithInverse, type Op } from './ops';
 import { door, room12x10, run, wall } from './test-helpers';
 import { feet, inches } from './units';
@@ -85,6 +85,28 @@ describe('reducer: structural rules', () => {
     const { doc: opened, inverse } = applyWithInverse(doc, { t: 'outline.open' });
     expect(opened!.features.d1).toBeUndefined();
     expect(applyOp(opened, inverse)).toEqual(doc);
+  });
+
+  it('comments go with the wall or feature they are pinned to, and undo brings them back', () => {
+    const comment = (id: string, target: CommentTarget) =>
+      ({ t: 'comment.add', comment: { id, target, tag: 'verify', by: 'office', at: 0, resolved: false } }) as const;
+    const doc = run(
+      [
+        { t: 'feature.add', feature: door('d1', 'w1', feet(2), inches(36)) },
+        comment('onDoor', { kind: 'feature', featureId: 'd1' }),
+        comment('onWall', { kind: 'wall', wallId: 'w1' }),
+        comment('onSpace', null),
+      ],
+      layout(),
+    )!;
+
+    const { doc: noDoor, inverse: undoDoor } = applyWithInverse(doc, { t: 'feature.remove', id: 'd1' });
+    expect(Object.keys(noDoor!.comments!)).toEqual(['onWall', 'onSpace']);
+    expect(applyOp(noDoor, undoDoor)).toEqual(doc);
+
+    const { doc: noWall, inverse: undoWall } = applyWithInverse(doc, { t: 'wall.remove', id: 'w1' });
+    expect(Object.keys(noWall!.comments!)).toEqual(['onSpace']);
+    expect(applyOp(noWall, undoWall)).toEqual(doc);
   });
 
   it('closure error is measured − computed, and no measured value is changed', () => {

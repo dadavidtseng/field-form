@@ -144,10 +144,15 @@ function applyBase(doc: LayoutDoc, op: BaseOp): BaseApplied {
       const wall = outline.walls[index];
       if (!wall) throw new OpError(`Wall ${op.id} does not exist`);
       const { kept, removed } = detachFeatures(doc, op.id);
+      const cut = detachComments(doc, op.id, removed);
       return {
-        doc: { ...withOutline(doc, { walls: outline.walls.filter((w) => w.id !== op.id) }), features: kept },
+        doc: { ...withOutline(cut.doc, { walls: outline.walls.filter((w) => w.id !== op.id) }), features: kept },
         // Restore the wall at the same position, then everything that was attached to it.
-        inverse: [{ t: 'wall.add', wall, index }, ...removed.map((f) => ({ t: 'feature.add', feature: f }) as const)],
+        inverse: [
+          { t: 'wall.add', wall, index },
+          ...removed.map((f) => ({ t: 'feature.add', feature: f }) as const),
+          ...cut.inverse,
+        ],
       };
     }
 
@@ -165,11 +170,13 @@ function applyBase(doc: LayoutDoc, op: BaseOp): BaseApplied {
       const id = outline.closingWallId;
       if (!id) throw new OpError('Outline is not closed');
       const { kept, removed } = detachFeatures(doc, id);
+      const cut = detachComments(doc, id, removed);
       return {
-        doc: { ...withOutline(doc, { closingWallId: null, closingLength: EMPTY }), features: kept },
+        doc: { ...withOutline(cut.doc, { closingWallId: null, closingLength: EMPTY }), features: kept },
         inverse: [
           { t: 'outline.close', closingWallId: id, closingLength: outline.closingLength },
           ...removed.map((f) => ({ t: 'feature.add', feature: f }) as const),
+          ...cut.inverse,
         ],
       };
     }
@@ -189,7 +196,8 @@ function applyBase(doc: LayoutDoc, op: BaseOp): BaseApplied {
       const f = doc.features[op.id];
       if (!f) throw new OpError(`Feature ${op.id} does not exist`);
       const { [op.id]: _removed, ...features } = doc.features;
-      return { doc: { ...doc, features }, inverse: [{ t: 'feature.add', feature: f }] };
+      const cut = detachComments(doc, null, [f]);
+      return { doc: { ...cut.doc, features }, inverse: [{ t: 'feature.add', feature: f }, ...cut.inverse] };
     }
 
     case 'comment.add': {
@@ -258,6 +266,27 @@ function detachFeatures(doc: Layout, wallId: string) {
     else kept[f.id] = f;
   }
   return { kept, removed };
+}
+
+/**
+ * Comments pinned to a wall or features that are being removed go with them, so none is left
+ * pointing at nothing (it could never be seen or resolved, and would block "ready to quote").
+ * The inverse re-adds them after their targets.
+ */
+function detachComments(doc: Layout, wallId: string | null, features: Feature[]) {
+  const gone = new Set(features.map((f) => f.id));
+  const removed = Object.values(doc.comments ?? {}).filter(
+    (c) =>
+      (c.target?.kind === 'wall' && c.target.wallId === wallId) ||
+      (c.target?.kind === 'feature' && gone.has(c.target.featureId)),
+  );
+  if (removed.length === 0) return { doc, inverse: [] as BaseOp[] };
+  const comments = { ...doc.comments };
+  for (const c of removed) delete comments[c.id];
+  return {
+    doc: { ...doc, comments },
+    inverse: removed.map((c): BaseOp => ({ t: 'comment.add', comment: c })),
+  };
 }
 
 function featureField(doc: Layout, featureId: string, field: string): Feature {
