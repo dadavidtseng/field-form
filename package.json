@@ -4,6 +4,7 @@
   "workspaces": [
     "shared",
     "server",
+    "mcp",
     "app"
   ],
   "engines": {
@@ -12,11 +13,12 @@
   "scripts": {
     "dev": "concurrently --names server,expo --prefix-colors blue,green --handle-input --default-input-target expo \"npm run dev -w server\" \"npm run start -w app\"",
     "server": "npm run dev -w server",
-    "test": "npm test -w shared -w server",
-    "typecheck": "npm run typecheck -w shared -w server -w app",
+    "test": "npm test -w shared -w server -w mcp",
+    "typecheck": "npm run typecheck -w shared -w server -w mcp -w app",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "mcp": "npm run start -w mcp"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
