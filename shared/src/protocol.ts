@@ -95,8 +95,13 @@ export const Index = z.object({
 export const ServerMsg = z.discriminatedUnion('type', [Commit, Ready, Reject, Index]);
 export type ServerMsg = z.infer<typeof ServerMsg>;
 
-/** Rejection layer 2: which roles may send which ops. Office may only send comment ops (none exist yet). */
+/** Rejection layer 2: which roles may send which ops. */
 export function canSend(role: Role, op: Op): boolean {
-  void op;
-  return role === 'field';
+  const ops = op.t === 'batch' ? op.ops : [op];
+  return ops.every((o) => {
+    // Nobody may post a comment in the other role's name.
+    if (o.t === 'comment.add' && o.comment.by !== role) return false;
+    // Comments are the office's only write path; the field may send everything.
+    return role === 'field' || o.t.startsWith('comment.');
+  });
 }

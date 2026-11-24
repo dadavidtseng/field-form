@@ -105,9 +105,40 @@ export const FEATURE_FIELDS = {
 /** Fields measured with calipers by default (fine detail rather than tape lengths). */
 export const DETAIL_FIELDS: ReadonlySet<string> = new Set(['size']);
 
+/** One-tap reasons, so Dana rarely has to type with gloves on. */
+export const CommentTag = z.enum(['verify', 'obstruction', 'out_of_square', 'damage']);
+export type CommentTag = z.infer<typeof CommentTag>;
+
+export const CommentAuthor = z.enum(['field', 'office']);
+export type CommentAuthor = z.infer<typeof CommentAuthor>;
+
+/** What a comment is pinned to; null means the space as a whole. */
+export const CommentTarget = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal('wall'), wallId: Id }),
+    z.object({ kind: z.literal('feature'), featureId: Id }),
+  ])
+  .nullable();
+export type CommentTarget = z.infer<typeof CommentTarget>;
+
+export const Comment = z
+  .object({
+    id: Id,
+    target: CommentTarget,
+    tag: CommentTag.optional(),
+    text: z.string().trim().max(500).optional(),
+    by: CommentAuthor,
+    at: z.number(),
+    resolved: z.boolean(),
+  })
+  .refine((c) => c.tag || c.text, { message: 'A comment needs a tag or some text' });
+export type Comment = z.infer<typeof Comment>;
+
 export interface Layout {
   name: string;
   kind: LayoutKind;
+  /** Two-way notes between field and office. Never change geometry or measurements. */
+  comments?: Record<string, Comment>;
   /** Deleted from the field. Soft: the layout and its history stay, and the delete can be undone. */
   archived?: boolean;
   outline: Outline;

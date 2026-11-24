@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  Comment,
   Dimension,
   DimensionTarget,
   EMPTY,
@@ -34,6 +35,10 @@ const baseOps = [
   z.object({ t: z.literal('feature.add'), feature: Feature }),
   z.object({ t: z.literal('feature.remove'), id: Id }),
   z.object({ t: z.literal('dimension.set'), target: DimensionTarget, dim: Dimension }),
+  z.object({ t: z.literal('comment.add'), comment: Comment }),
+  z.object({ t: z.literal('comment.resolve'), id: Id, resolved: z.boolean() }),
+  /** Only ever sent as the undo of `comment.add`. */
+  z.object({ t: z.literal('comment.remove'), id: Id }),
 ] as const;
 
 export const BaseOp = z.discriminatedUnion('t', [...baseOps]);
@@ -96,6 +101,7 @@ function applyBase(doc: LayoutDoc, op: BaseOp): BaseApplied {
         name: op.name,
         kind: op.kind,
         archived: false,
+        comments: {},
         outline: { walls: [], closingWallId: null, closingLength: EMPTY },
         features: {},
       },
@@ -184,6 +190,35 @@ function applyBase(doc: LayoutDoc, op: BaseOp): BaseApplied {
       if (!f) throw new OpError(`Feature ${op.id} does not exist`);
       const { [op.id]: _removed, ...features } = doc.features;
       return { doc: { ...doc, features }, inverse: [{ t: 'feature.add', feature: f }] };
+    }
+
+    case 'comment.add': {
+      const c = op.comment;
+      const comments = doc.comments ?? {};
+      if (comments[c.id]) throw new OpError(`Comment ${c.id} already exists`);
+      if (c.target?.kind === 'wall' && !hasWall(doc, c.target.wallId)) {
+        throw new OpError("Can't comment: that wall was deleted");
+      }
+      if (c.target?.kind === 'feature' && !doc.features[c.target.featureId]) {
+        throw new OpError("Can't comment: that feature was deleted");
+      }
+      return { doc: { ...doc, comments: { ...comments, [c.id]: c } }, inverse: [{ t: 'comment.remove', id: c.id }] };
+    }
+
+    case 'comment.resolve': {
+      const c = doc.comments?.[op.id];
+      if (!c) throw new OpError(`Comment ${op.id} does not exist`);
+      return {
+        doc: { ...doc, comments: { ...doc.comments, [op.id]: { ...c, resolved: op.resolved } } },
+        inverse: [{ t: 'comment.resolve', id: op.id, resolved: c.resolved }],
+      };
+    }
+
+    case 'comment.remove': {
+      const c = doc.comments?.[op.id];
+      if (!c) throw new OpError(`Comment ${op.id} does not exist`);
+      const { [op.id]: _removed, ...comments } = doc.comments ?? {};
+      return { doc: { ...doc, comments }, inverse: [{ t: 'comment.add', comment: c }] };
     }
 
     case 'dimension.set': {

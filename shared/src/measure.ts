@@ -171,6 +171,8 @@ export interface LayoutSummaryNumbers {
   closure: { errorUm: Um; level: ClosureLevel } | null;
   measured: number;
   total: number;
+  /** Unresolved comments: an open question also means "not ready to quote". */
+  openComments: number;
 }
 
 /** What an estimator needs first: size, how trustworthy it is, and what is still missing. */
@@ -182,5 +184,6 @@ export function layoutSummary(layout: Layout): LayoutSummaryNumbers {
     areaSqFt: sqUm === null ? null : sqUm / SQ_UM_PER_SQ_FT,
     closure: closureCheck(layout),
     ...requiredProgress(slots),
+    openComments: Object.values(layout.comments ?? {}).filter((c) => !c.resolved).length,
   };
 }
