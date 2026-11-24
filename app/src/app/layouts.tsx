@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFollowDana, useFollowStore } from '../state/follow';
 import { useLayoutIndex, type LayoutRow } from '../sync/useLayoutIndex';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { UnitToggle } from '../ui/UnitToggle';
 import { TOUCH, color } from '../ui/theme';
 
 function ago(ts: number): string {
@@ -36,12 +37,15 @@ export default function LayoutList() {
         title={role === 'field' ? 'Field · Spaces' : 'Office · Spaces'}
         onBack={() => router.back()}
         right={
-          role === 'office' && (
-            <View style={styles.follow}>
-              <Text style={styles.followText}>Follow Dana</Text>
-              <Switch value={follow} onValueChange={setFollow} />
-            </View>
-          )
+          <>
+            {role === 'office' && (
+              <View style={styles.follow}>
+                <Text style={styles.followText}>Follow Dana</Text>
+                <Switch value={follow} onValueChange={setFollow} />
+              </View>
+            )}
+            <UnitToggle />
+          </>
         }
       />
       {role === 'field' && (

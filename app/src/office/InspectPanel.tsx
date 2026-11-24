@@ -1,14 +1,15 @@
 import {
-  formatFeetInches,
+  formatArea,
   formatLength,
-  formatMillimetres,
   layoutSummary,
+  otherSystem,
   type ClosureLevel,
   type Layout,
   type Slot,
 } from '@field-form/shared';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useUnitSystem } from '../state/units';
 import { color } from '../ui/theme';
 
 const CLOSURE_TEXT: Record<ClosureLevel, string> = { ok: 'closes ✓', warn: 'check a wall', bad: 're-measure' };
@@ -42,6 +43,7 @@ export function InspectPanel({
   /** Comments for the selection, or for the whole space in the overview (Marcus's only write path). */
   comments: ReactNode;
 }) {
+  const system = useUnitSystem();
   if (selection) {
     return (
       <ScrollView style={styles.panel} contentContainerStyle={styles.content}>
@@ -65,8 +67,8 @@ export function InspectPanel({
             {s.value !== null ? (
               <>
                 <Text style={styles.value}>
-                  {s.detail ? formatLength(s.value, 'imperial', true) : formatFeetInches(s.value)}{' '}
-                  <Text style={styles.mm}>· {formatMillimetres(s.value, s.detail ? 2 : 0)}</Text>
+                  {formatLength(s.value, system, s.detail)}{' '}
+                  <Text style={styles.mm}>· {formatLength(s.value, otherSystem(system), s.detail)}</Text>
                 </Text>
                 <Text style={styles.meta}>
                   {[s.dim?.source, s.dim?.device, time(s.dim?.capturedAt), s.dim?.capturedBy]
@@ -75,7 +77,7 @@ export function InspectPanel({
                 </Text>
               </>
             ) : (
-              <Text style={styles.missing}>Not measured yet · sketch ~{formatFeetInches(s.estimateUm)}</Text>
+              <Text style={styles.missing}>Not measured yet · sketch ~{formatLength(s.estimateUm, system)}</Text>
             )}
           </Pressable>
         ))}
@@ -89,11 +91,11 @@ export function InspectPanel({
   return (
     <ScrollView style={styles.panel} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Overview</Text>
-      <Stat label={sum.areaSqFt === null ? 'Length' : 'Perimeter'} value={formatFeetInches(sum.perimeterUm)} />
-      {sum.areaSqFt !== null && <Stat label="Area" value={`${sum.areaSqFt.toFixed(1)} sq ft`} />}
+      <Stat label={sum.areaSqUm === null ? 'Length' : 'Perimeter'} value={formatLength(sum.perimeterUm, system)} />
+      {sum.areaSqUm !== null && <Stat label="Area" value={formatArea(sum.areaSqUm, system)} />}
       {sum.closure && (
         <Text style={[styles.closure, { color: CLOSURE_COLOR[sum.closure.level] }]}>
-          Off by {formatFeetInches(Math.abs(sum.closure.errorUm))} — {CLOSURE_TEXT[sum.closure.level]}
+          Off by {formatLength(Math.abs(sum.closure.errorUm), system)} — {CLOSURE_TEXT[sum.closure.level]}
         </Text>
       )}
       <Text style={[styles.progress, remaining || sum.openComments ? styles.notReady : styles.ready]}>

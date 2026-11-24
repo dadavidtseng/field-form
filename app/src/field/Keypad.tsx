@@ -1,6 +1,7 @@
-import { formatFeetInches, parseLength, type Um } from '@field-form/shared';
+import { formatLength, parseLength, type Um } from '@field-form/shared';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useUnitSystem } from '../state/units';
 import { TOUCH, color } from '../ui/theme';
 
 const ROWS = [
@@ -31,7 +32,9 @@ export function Keypad({
   fill?: boolean;
 }) {
   const [text, setText] = useState('');
-  const parsed = parseLength(text);
+  const system = useUnitSystem();
+  // A bare number means whatever this device displays: inches in ft-in mode, mm in metric.
+  const parsed = parseLength(text, system === 'metric' ? 'mm' : 'in');
 
   const press = (key: string) => {
     if (key === '⌫') setText((t) => t.slice(0, -1));
@@ -47,7 +50,13 @@ export function Keypad({
         {fill && <Text style={styles.caption}>{title}</Text>}
         <Text style={[styles.input, fill && styles.inputFill]}>{text || ' '}</Text>
         <Text style={[styles.preview, fill && styles.previewFill, !parsed && text ? styles.bad : null]}>
-          {text ? (parsed !== null ? `= ${formatFeetInches(parsed)}` : "Can't read that yet") : 'e.g. 12\' 4-3/8"'}
+          {text
+            ? parsed !== null
+              ? `= ${formatLength(parsed, system)}`
+              : "Can't read that yet"
+            : system === 'metric'
+              ? 'e.g. 3760 (mm) or 3.76 m'
+              : 'e.g. 12\' 4-3/8"'}
         </Text>
       </View>
       {ROWS.map((row) => (

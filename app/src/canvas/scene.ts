@@ -1,7 +1,7 @@
 import {
   UM_PER_INCH,
   effective,
-  formatFeetInches,
+  formatLength,
   isWallFeature,
   postPosition,
   segments,
@@ -9,6 +9,7 @@ import {
   type Feature,
   type Layout,
   type Pt,
+  type UnitSystem,
 } from '@field-form/shared';
 
 // Turns a layout into flat drawing instructions in canvas world units (inches, y up).
@@ -57,7 +58,7 @@ function insideIsLeft(walls: WallLine[]): boolean {
   return twice >= 0;
 }
 
-export function buildScene(layout: Layout): Scene {
+export function buildScene(layout: Layout, system: UnitSystem = 'imperial'): Scene {
   const segs = segments(layout.outline);
   const walls: WallLine[] = segs.map((s) => ({
     id: s.wallId,
@@ -83,7 +84,7 @@ export function buildScene(layout: Layout): Scene {
       key: s.wallId,
       at: { x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 },
       offset: { x: -inward.x, y: -inward.y },
-      text: `${w.measured ? '' : '~'}${formatFeetInches(Math.round(length))}`,
+      text: `${w.measured ? '' : '~'}${formatLength(Math.round(length), system)}`,
     };
   });
 

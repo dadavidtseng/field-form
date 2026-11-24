@@ -1,12 +1,6 @@
-import {
-  formatFeetInches,
-  formatLength,
-  formatMillimetres,
-  type ClosureLevel,
-  type Slot,
-  type Um,
-} from '@field-form/shared';
+import { formatLength, otherSystem, type ClosureLevel, type Slot, type Um, type UnitSystem } from '@field-form/shared';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useUnitSystem } from '../state/units';
 import { TOUCH, color } from '../ui/theme';
 
 const CLOSURE_TEXT: Record<ClosureLevel, string> = {
@@ -16,9 +10,14 @@ const CLOSURE_TEXT: Record<ClosureLevel, string> = {
 };
 const CLOSURE_COLOR: Record<ClosureLevel, string> = { ok: color.ok, warn: color.warn, bad: color.bad };
 
-/** Detail (caliper) values are shown to 1/32" with mm to 0.01, where small differences matter. */
-const show = (um: Um, detail: boolean) =>
-  detail ? `${formatLength(um, 'imperial', true)} · ${formatMillimetres(um, 2)}` : formatFeetInches(um);
+/**
+ * A value in this device's units. Detail (caliper) values are fine enough that both systems are
+ * shown (1/32" and 0.01 mm), since small differences matter there.
+ */
+const show = (um: Um, detail: boolean, system: UnitSystem) =>
+  detail
+    ? `${formatLength(um, system, true)} · ${formatLength(um, otherSystem(system), true)}`
+    : formatLength(um, system);
 
 /**
  * The armed slot and the two ways to fill it. The tape button stands in for the button on
@@ -53,6 +52,7 @@ export function MeasurePanel({
   /** Short screens (phone landscape): smaller type and buttons so the panel fits beside the plan. */
   dense?: boolean;
 }) {
+  const system = useUnitSystem();
   return (
     <View style={[styles.panel, dense && styles.panelDense]}>
       <View style={styles.info}>
@@ -60,7 +60,9 @@ export function MeasurePanel({
           <>
             <Text style={styles.armed}>{slot.label}</Text>
             <Text style={[styles.value, dense && styles.valueDense]}>
-              {slot.value !== null ? show(slot.value, slot.detail) : `~${show(slot.estimateUm, slot.detail)}`}
+              {slot.value !== null
+                ? show(slot.value, slot.detail, system)
+                : `~${show(slot.estimateUm, slot.detail, system)}`}
             </Text>
             <Text style={styles.meta}>
               {measuredCount} of {totalCount} measured ·{' '}
@@ -82,12 +84,12 @@ export function MeasurePanel({
         {closure && (
           <Text style={[styles.closure, { color: CLOSURE_COLOR[closure.level] }]}>
             {/* The size of the error comes first: it is the number Dana acts on. */}
-            Off by {formatFeetInches(Math.abs(closure.errorUm))} — {CLOSURE_TEXT[closure.level]}
+            Off by {formatLength(Math.abs(closure.errorUm), system)} — {CLOSURE_TEXT[closure.level]}
           </Text>
         )}
         <View style={styles.sim}>
           <Pressable accessibilityRole="button" onPress={onEditNext} style={styles.simButton}>
-            <Text style={styles.simText}>Next: {show(nextReading, !!slot?.detail)} ✎</Text>
+            <Text style={styles.simText}>Next: {show(nextReading, !!slot?.detail, system)} ✎</Text>
           </Pressable>
           <Text style={styles.simText}>Simulate tape error</Text>
           <Switch value={realisticError} onValueChange={onToggleError} />
