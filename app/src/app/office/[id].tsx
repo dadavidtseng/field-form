@@ -1,9 +1,20 @@
-import { featureNames, hitTest, measureGuide, measureSlots, type Hit, type Pt } from '@field-form/shared';
+import {
+  featureNames,
+  hitTest,
+  measureGuide,
+  measureSlots,
+  type CommentTarget,
+  type Hit,
+  type Pt,
+} from '@field-form/shared';
+import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Switch, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayoutCanvas } from '../../canvas/LayoutCanvas';
+import { CommentsPanel } from '../../comments/CommentsPanel';
+import { commentsOn, pinsFor } from '../../comments/targets';
 import { InspectPanel, type Selection } from '../../office/InspectPanel';
 import { useChangeFlash } from '../../office/useChangeFlash';
 import { useFollowDana, useFollowStore } from '../../state/follow';
@@ -47,6 +58,35 @@ export default function OfficeLayout() {
 
   const active = selection?.slots.find((s) => s.key === activeKey) ?? selection?.slots[0] ?? null;
 
+  // Comments follow the tapped wall or feature; with nothing tapped they are about the space.
+  const commentTarget: CommentTarget =
+    layout && selection && hit
+      ? hit.kind === 'feature'
+        ? { kind: 'feature', featureId: hit.id }
+        : { kind: 'wall', wallId: hit.id }
+      : null;
+  const comments = layout ? (
+    <CommentsPanel
+      title={selection ? 'Comments' : 'Comments on this space'}
+      comments={commentsOn(layout, commentTarget)}
+      onAdd={(tag, text) =>
+        sync.submit({
+          t: 'comment.add',
+          comment: {
+            id: randomUUID(),
+            target: commentTarget,
+            tag,
+            text,
+            by: 'office',
+            at: Date.now(),
+            resolved: false,
+          },
+        })
+      }
+      onToggle={(commentId, resolved) => sync.submit({ t: 'comment.resolve', id: commentId, resolved })}
+    />
+  ) : null;
+
   const onTap = (p: Pt, umPerPx: number) => {
     if (!layout) return;
     setHit(hitTest(layout, p, TAP_RADIUS_PX * umPerPx));
@@ -60,6 +100,7 @@ export default function OfficeLayout() {
       flashIds={flashIds}
       onTap={onTap}
       guide={layout && active ? measureGuide(layout, active.target) : null}
+      pins={layout ? pinsFor(layout) : undefined}
     />
   );
 
@@ -100,6 +141,7 @@ export default function OfficeLayout() {
                 activeKey={active?.key ?? null}
                 onPick={setActiveKey}
                 onClear={() => setHit(null)}
+                comments={comments}
               />
             </View>
           )}

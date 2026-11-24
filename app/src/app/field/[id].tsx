@@ -32,6 +32,8 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayoutCanvas } from '../../canvas/LayoutCanvas';
+import { CommentsPanel } from '../../comments/CommentsPanel';
+import { commentTargetFor, commentsOn, pinsFor } from '../../comments/targets';
 import { FeatureBar } from '../../field/FeatureBar';
 import { Keypad } from '../../field/Keypad';
 import { LayoutMenu } from '../../field/LayoutMenu';
@@ -81,6 +83,7 @@ export default function FieldLayout() {
   const [realisticError, setRealisticError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const tape = useMemo(() => new SimulatedTape(), []);
   const caliper = useMemo(() => new SimulatedCaliper(), []);
   const created = useRef(false);
@@ -231,6 +234,16 @@ export default function FieldLayout() {
   const armedFeature = armedFeatureId ? layout?.features[armedFeatureId] : undefined;
   const names = layout ? featureNames(layout) : {};
   const progress = requiredProgress(slots);
+
+  // Comments follow the selection: the armed wall or feature, or the whole space.
+  const commentTarget = layout ? commentTargetFor(layout, armed?.target ?? null) : null;
+  const targetComments = layout ? commentsOn(layout, commentTarget) : [];
+  const openHere = targetComments.filter((c) => !c.resolved).length;
+  const commentTitle = !commentTarget
+    ? 'This space'
+    : commentTarget.kind === 'feature'
+      ? (names[commentTarget.featureId] ?? 'Feature')
+      : (armed?.label ?? 'Wall');
   // Fine detail (post size) is taken with calipers; everything else with the tape.
   const device = armed?.detail ? caliper : tape;
 
@@ -275,6 +288,7 @@ export default function FieldLayout() {
       guide={!sketching && layout && armed ? measureGuide(layout, armed.target) : null}
       onTap={onTap}
       draft={draft}
+      pins={layout ? pinsFor(layout) : undefined}
     />
   );
 
@@ -312,6 +326,8 @@ export default function FieldLayout() {
                 measured: s.value !== null,
               }))}
               dense={dense}
+              commentLabel={openHere ? `Comments (${openHere})` : 'Comment'}
+              onComments={() => setCommentsOpen(true)}
               onPickField={(key) => {
                 setArmedKey(key);
                 setNextOverride(null);
@@ -339,6 +355,32 @@ export default function FieldLayout() {
   // Rendered inside the side column in landscape (so they never cover the plan), else over the screen.
   const overlays = (
     <>
+      {commentsOpen && layout && (
+        <View style={[styles.sheet, sideBySide && styles.sheetFill]}>
+          <ScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+            <CommentsPanel
+              title={`Comments · ${commentTitle}`}
+              comments={targetComments}
+              onAdd={(tag, text) =>
+                run({
+                  t: 'comment.add',
+                  comment: {
+                    id: randomUUID(),
+                    target: commentTarget,
+                    tag,
+                    text,
+                    by: 'field',
+                    at: Date.now(),
+                    resolved: false,
+                  },
+                })
+              }
+              onToggle={(commentId, resolved) => run({ t: 'comment.resolve', id: commentId, resolved })}
+            />
+            <BigButton label="Close" onPress={() => setCommentsOpen(false)} />
+          </ScrollView>
+        </View>
+      )}
       {menuOpen && layout && (
         <LayoutMenu
           name={layout.name}
@@ -420,6 +462,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuText: { fontSize: 32, fontWeight: '900', color: color.ink },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: '75%',
+    backgroundColor: color.paper,
+    borderTopWidth: 3,
+    borderTopColor: color.ink,
+  },
+  sheetFill: { top: 0, maxHeight: '100%' },
+  sheetContent: { padding: 12, gap: 12 },
   deleted: { padding: 16, gap: 12, borderTopWidth: 3, borderTopColor: color.bad },
   deletedText: { fontSize: 20, fontWeight: '800', color: color.bad },
   disabled: { opacity: 0.35 },

@@ -7,6 +7,7 @@ import {
   type Layout,
   type Slot,
 } from '@field-form/shared';
+import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { color } from '../ui/theme';
 
@@ -31,12 +32,15 @@ export function InspectPanel({
   activeKey,
   onPick,
   onClear,
+  comments,
 }: {
   layout: Layout;
   selection: Selection | null;
   activeKey: string | null;
   onPick: (key: string) => void;
   onClear: () => void;
+  /** Comments for the selection, or for the whole space in the overview (Marcus's only write path). */
+  comments: ReactNode;
 }) {
   if (selection) {
     return (
@@ -75,6 +79,7 @@ export function InspectPanel({
             )}
           </Pressable>
         ))}
+        {comments}
       </ScrollView>
     );
   }
@@ -91,12 +96,20 @@ export function InspectPanel({
           Off by {formatFeetInches(Math.abs(sum.closure.errorUm))} — {CLOSURE_TEXT[sum.closure.level]}
         </Text>
       )}
-      <Text style={[styles.progress, remaining ? styles.notReady : styles.ready]}>
+      <Text style={[styles.progress, remaining || sum.openComments ? styles.notReady : styles.ready]}>
         {remaining
           ? `${remaining} measurement${remaining === 1 ? '' : 's'} still to take`
-          : `All ${sum.total} measured · ready to quote`}
+          : sum.openComments
+            ? `All ${sum.total} measured`
+            : `All ${sum.total} measured · ready to quote`}
       </Text>
-      <Text style={styles.hint}>Tap a wall, door or post to inspect it.</Text>
+      {sum.openComments > 0 && (
+        <Text style={[styles.progress, styles.notReady]}>
+          {sum.openComments} open comment{sum.openComments === 1 ? '' : 's'} to resolve
+        </Text>
+      )}
+      <Text style={styles.hint}>Tap a wall, door or post to inspect or comment on it.</Text>
+      {comments}
     </ScrollView>
   );
 }

@@ -25,6 +25,8 @@ export function FeatureBar({
   onRemove,
   onPickField,
   dense = false,
+  commentLabel,
+  onComments,
 }: {
   wallArmed: boolean;
   /** Name of the armed feature ("Door 1"), or null when a wall or nothing is armed. */
@@ -40,6 +42,9 @@ export function FeatureBar({
   onPickField: (key: string) => void;
   /** Short screens (phone landscape): smaller chips so the controls fit beside the plan. */
   dense?: boolean;
+  /** "Comments (2)" for the selection, or for the whole space when nothing is selected. */
+  commentLabel: string;
+  onComments: () => void;
 }) {
   return (
     <DenseContext.Provider value={dense}>
@@ -53,6 +58,8 @@ export function FeatureBar({
         onPost={onPost}
         onRemove={onRemove}
         onPickField={onPickField}
+        commentLabel={commentLabel}
+        onComments={onComments}
       />
     </DenseContext.Provider>
   );
@@ -71,6 +78,8 @@ function FeatureBarBody({
   onPost,
   onRemove,
   onPickField,
+  commentLabel,
+  onComments,
 }: Omit<Parameters<typeof FeatureBar>[0], 'dense'>) {
   const dense = useContext(DenseContext);
   if (placingPost) {
@@ -93,6 +102,7 @@ function FeatureBarBody({
       ))
     : [];
   const actionChips = [
+    <Chip key="comments" label={`💬 ${commentLabel}`} onPress={onComments} />,
     ...(wallArmed ? WALL_FEATURES.map((f) => <Chip key={f.kind} label={f.label} onPress={() => onAdd(f.kind)} />) : []),
     <Chip key="post" label="+ Post" onPress={onPost} />,
     ...(featureName ? [<Chip key="remove" label={`Remove ${featureName}`} danger onPress={onRemove} />] : []),
