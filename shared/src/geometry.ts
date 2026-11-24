@@ -1,4 +1,12 @@
-import { isWallFeature, type Dimension, type Feature, type Layout, type Outline, type Wall } from './model';
+import {
+  isWallFeature,
+  type Dimension,
+  type DimensionTarget,
+  type Feature,
+  type Layout,
+  type Outline,
+  type Wall,
+} from './model';
 import { UM_PER_FOOT, type Um } from './units';
 
 // All geometry is derived from the walls and never stored, so it can never disagree
@@ -110,12 +118,66 @@ export function wallFeatureSpan(layout: Layout, f: Exclude<Feature, { kind: 'pos
   const s = segmentFor(layout.outline, f.wallId);
   if (!s) return null;
   const { ux, uy } = frame(s);
-  const start = effective(f.offset, f.sketch.offset);
-  const end = start + effective(f.width, f.sketch.width);
+  const offset = effective(f.offset, f.sketch.offset);
+  const width = effective(f.width, f.sketch.width);
+  // The offset runs from whichever end of the wall the feature is measured from.
+  const start = f.from === 'end' ? s.length - offset - width : offset;
+  const end = start + width;
   return {
     a: { x: s.a.x + ux * start, y: s.a.y + uy * start },
     b: { x: s.a.x + ux * end, y: s.a.y + uy * end },
   };
+}
+
+/** A dimension line to draw for the measurement Dana is about to take. */
+export interface Guide {
+  /** The two ends of the distance being measured. */
+  a: Pt;
+  b: Pt;
+  /** The corner the distance is measured from (shown as the yellow corner). */
+  corner: Pt;
+  /** Unit direction to push the line off the wall on screen, so it does not sit on top of it. */
+  normal: Pt;
+}
+
+/** True when the inside of the outline is to the left of each wall (drawn counter-clockwise). */
+function insideIsLeft(outline: Outline): boolean {
+  const pts = corners(outline);
+  let twice = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]!;
+    const b = pts[(i + 1) % pts.length]!;
+    twice += a.x * b.y - b.x * a.y;
+  }
+  return twice >= 0;
+}
+
+/** What to draw so Dana can see exactly which distance the armed measurement means. */
+export function measureGuide(layout: Layout, target: DimensionTarget): Guide | null {
+  if (target.kind !== 'feature') return null;
+  const f = layout.features[target.featureId];
+  if (!f) return null;
+
+  if (f.kind === 'post') {
+    const s = segmentFor(layout.outline, f.cornerWallId);
+    const c = postPosition(layout, f);
+    if (!s || !c) return null;
+    const { ux, uy } = frame(s);
+    const along = effective(f.dx, f.sketch.dx);
+    const foot = { x: s.a.x + ux * along, y: s.a.y + uy * along };
+    const line = target.field === 'dx' ? { a: s.a, b: foot } : { a: foot, b: c };
+    return { ...line, corner: s.a, normal: { x: 0, y: 0 } };
+  }
+
+  const s = segmentFor(layout.outline, f.wallId);
+  const span = wallFeatureSpan(layout, f);
+  if (!s || !span) return null;
+  const { nx, ny } = frame(s);
+  const out = insideIsLeft(layout.outline) ? { x: -nx, y: -ny } : { x: nx, y: ny };
+  const fromEnd = f.from === 'end';
+  const corner = fromEnd ? s.b : s.a;
+  const line = target.field === 'offset' ? { a: corner, b: fromEnd ? span.b : span.a } : { a: span.a, b: span.b };
+  return { ...line, corner, normal: out };
 }
 
 /** Post centre. Measured offsets are distances; the side of the wall comes from the sketch tap. */

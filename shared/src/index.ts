@@ -4,6 +4,7 @@ export * from './ops';
 export * from './geometry';
 export * from './sketch';
 export * from './measure';
+export * from './features';
 export * from './tape';
 export * from './protocol';
 export * from './sync-state';

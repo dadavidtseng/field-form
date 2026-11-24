@@ -52,7 +52,15 @@ export type Outline = z.infer<typeof Outline>;
 /** Where a tap placed the feature; used for drawing until the real dimensions are measured. */
 const WallSketch = z.object({ offset: LengthUm, width: LengthUm.positive() });
 
-const OnWall = { id: Id, wallId: Id, offset: Dimension, width: Dimension, sketch: WallSketch };
+const OnWall = {
+  id: Id,
+  wallId: Id,
+  /** Which end of the wall `offset` is measured from: whichever corner was nearer when placed. */
+  from: z.enum(['start', 'end']).optional(),
+  offset: Dimension,
+  width: Dimension,
+  sketch: WallSketch,
+};
 
 export const Feature = z.discriminatedUnion('kind', [
   z.object({ ...OnWall, kind: z.literal('door'), height: Dimension.optional() }),

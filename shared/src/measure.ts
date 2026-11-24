@@ -1,5 +1,6 @@
+import { featureNames } from './features';
 import { closure, segments } from './geometry';
-import type { DimensionTarget, Layout } from './model';
+import type { Dimension, DimensionTarget, Feature, Layout } from './model';
 import { inches, type Um } from './units';
 
 // The measuring flow: which slots exist, in what order Dana fills them, and how far
@@ -30,7 +31,7 @@ export function targetKey(t: DimensionTarget): string {
 export function measureSlots(layout: Layout): Slot[] {
   const segs = segments(layout.outline);
   const total = segs.length;
-  return segs.map((s, i) => {
+  const wallSlots: Slot[] = segs.map((s, i) => {
     const target: DimensionTarget = s.closing ? { kind: 'closing' } : { kind: 'wall', wallId: s.wallId };
     const value = s.closing
       ? layout.outline.closingLength.value
@@ -43,7 +44,50 @@ export function measureSlots(layout: Layout): Slot[] {
       value,
     };
   });
+
+  // Then each feature's two basic measurements, in the order the features were added.
+  const names = featureNames(layout);
+  const featureSlots: Slot[] = Object.values(layout.features).flatMap((f) =>
+    BASIC_FIELDS[f.kind].map((field) => {
+      const target: DimensionTarget = { kind: 'feature', featureId: f.id, field };
+      const dim = (f as Record<string, unknown>)[field] as Dimension | undefined;
+      return {
+        target,
+        key: targetKey(target),
+        label: `${names[f.id]} · ${FIELD_LABEL[field]}`,
+        estimateUm: Math.abs(sketchFor(f, field)),
+        value: dim?.value ?? null,
+      };
+    }),
+  );
+  return [...wallSlots, ...featureSlots];
 }
+
+/** The two measurements that fix a feature's position and size; the rest are optional extras. */
+// Width first: it is the thing Dana is looking at. Then where it sits.
+const BASIC_FIELDS: Record<Feature['kind'], string[]> = {
+  door: ['width', 'offset'],
+  window: ['width', 'offset'],
+  opening: ['width', 'offset'],
+  step: ['width', 'offset'],
+  post: ['dx', 'dy'],
+};
+
+// Labels refer to what the canvas shows: the yellow corner and the dimension line.
+const FIELD_LABEL: Record<string, string> = {
+  width: 'width',
+  offset: 'from the yellow corner',
+  dx: 'along the wall from the yellow corner',
+  dy: 'out from that wall',
+};
+
+function sketchFor(f: Feature, field: string): Um {
+  if (f.kind === 'post') return field === 'dx' ? f.sketch.dx : f.sketch.dy;
+  return field === 'offset' ? f.sketch.offset : f.sketch.width;
+}
+
+/** True for a slot that measures a feature, as opposed to a wall. */
+export const isFeatureSlot = (s: Slot): boolean => s.target.kind === 'feature';
 
 /** The next empty slot after `afterKey` (wrapping round), or null when everything is measured. */
 export function nextUnmeasured(slots: Slot[], afterKey?: string | null): Slot | null {
