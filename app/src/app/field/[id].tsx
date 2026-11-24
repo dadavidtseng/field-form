@@ -41,6 +41,7 @@ import { MeasurePanel } from '../../field/MeasurePanel';
 import { SketchBar } from '../../field/SketchBar';
 import { useLayoutSync } from '../../sync/useLayoutSync';
 import { BigButton } from '../../ui/BigButton';
+import { PresenceNote } from '../../ui/PresenceNote';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { StatusBadge } from '../../ui/StatusBadge';
 import { HEADER_CONTROL, HEADER_RADIUS, breakpoints, color } from '../../ui/theme';
@@ -291,6 +292,8 @@ export default function FieldLayout() {
       pins={layout ? pinsFor(layout) : undefined}
     />
   );
+  // Everyone else on this space (this device is one of the field count).
+  const others = { field: Math.max(0, sync.presence.field - 1), office: sync.presence.office };
 
   const controls = (
     <>
@@ -415,7 +418,10 @@ export default function FieldLayout() {
       {header}
       {sideBySide ? (
         <View style={styles.row}>
-          <View style={styles.flex}>{canvas}</View>
+          <View style={styles.flex}>
+            {canvas}
+            <PresenceNote others={others} />
+          </View>
           <View style={styles.side}>
             <ScrollView contentContainerStyle={styles.sideContent} persistentScrollbar>
               {controls}
@@ -425,7 +431,10 @@ export default function FieldLayout() {
         </View>
       ) : (
         <>
-          <View style={styles.flex}>{canvas}</View>
+          <View style={styles.flex}>
+            {canvas}
+            <PresenceNote others={others} />
+          </View>
           {controls}
           {overlays}
         </>

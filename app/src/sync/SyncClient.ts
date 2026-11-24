@@ -28,6 +28,8 @@ export interface SyncSnapshot {
   pendingCount: number;
   lastSeq: number;
   canUndo: boolean;
+  /** How many devices of each role have this space open, this one included. */
+  presence: { field: number; office: number };
   /** Explanation of the latest dropped edit. Always reported, so Dana knows to redo it. */
   notice: string | null;
 }
@@ -44,6 +46,7 @@ export class SyncClient {
     pendingCount: 0,
     lastSeq: 0,
     canUndo: false,
+    presence: { field: 0, office: 0 },
     notice: null,
   }));
 
@@ -146,6 +149,11 @@ export class SyncClient {
         break;
       }
       case 'index':
+        return;
+      case 'presence':
+        if (msg.layoutId === this.layoutId) {
+          this.store.setState({ presence: { field: msg.field, office: msg.office } });
+        }
         return;
     }
     this.publish();
