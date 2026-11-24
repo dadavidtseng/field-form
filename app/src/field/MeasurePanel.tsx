@@ -1,4 +1,11 @@
-import { formatFeetInches, type ClosureLevel, type Slot, type Um } from '@field-form/shared';
+import {
+  formatFeetInches,
+  formatLength,
+  formatMillimetres,
+  type ClosureLevel,
+  type Slot,
+  type Um,
+} from '@field-form/shared';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { TOUCH, color } from '../ui/theme';
 
@@ -9,6 +16,10 @@ const CLOSURE_TEXT: Record<ClosureLevel, string> = {
 };
 const CLOSURE_COLOR: Record<ClosureLevel, string> = { ok: color.ok, warn: color.warn, bad: color.bad };
 
+/** Detail (caliper) values are shown to 1/32" with mm to 0.01, where small differences matter. */
+const show = (um: Um, detail: boolean) =>
+  detail ? `${formatLength(um, 'imperial', true)} · ${formatMillimetres(um, 2)}` : formatFeetInches(um);
+
 /**
  * The armed slot and the two ways to fill it. The tape button stands in for the button on
  * the physical tape: one press, no screen precision needed, then the next slot arms itself.
@@ -16,6 +27,7 @@ const CLOSURE_COLOR: Record<ClosureLevel, string> = { ok: color.ok, warn: color.
 export function MeasurePanel({
   slot,
   measuredCount,
+  deviceLabel,
   totalCount,
   nextReading,
   realisticError,
@@ -28,6 +40,8 @@ export function MeasurePanel({
 }: {
   slot: Slot | null;
   measuredCount: number;
+  /** Which tool the big button stands in for: the tape, or calipers for fine detail. */
+  deviceLabel: 'TAPE' | 'CALIPER';
   totalCount: number;
   nextReading: Um;
   realisticError: boolean;
@@ -46,7 +60,7 @@ export function MeasurePanel({
           <>
             <Text style={styles.armed}>{slot.label}</Text>
             <Text style={[styles.value, dense && styles.valueDense]}>
-              {slot.value !== null ? formatFeetInches(slot.value) : `~${formatFeetInches(slot.estimateUm)}`}
+              {slot.value !== null ? show(slot.value, slot.detail) : `~${show(slot.estimateUm, slot.detail)}`}
             </Text>
             <Text style={styles.meta}>
               {measuredCount} of {totalCount} measured ·{' '}
@@ -73,7 +87,7 @@ export function MeasurePanel({
         )}
         <View style={styles.sim}>
           <Pressable accessibilityRole="button" onPress={onEditNext} style={styles.simButton}>
-            <Text style={styles.simText}>Next: {formatFeetInches(nextReading)} ✎</Text>
+            <Text style={styles.simText}>Next: {show(nextReading, !!slot?.detail)} ✎</Text>
           </Pressable>
           <Text style={styles.simText}>Simulate tape error</Text>
           <Switch value={realisticError} onValueChange={onToggleError} />
@@ -92,7 +106,7 @@ export function MeasurePanel({
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.tapeText}>TAPE</Text>
+          <Text style={[styles.tapeText, deviceLabel.length > 5 && styles.tapeTextLong]}>{deviceLabel}</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -141,6 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tapeText: { fontSize: 24, fontWeight: '900', color: color.ink },
+  tapeTextLong: { fontSize: 16 },
   manual: {
     minHeight: TOUCH - 8,
     width: 104,

@@ -1,5 +1,6 @@
 import {
   formatFeetInches,
+  formatLength,
   formatMillimetres,
   layoutSummary,
   type ClosureLevel,
@@ -53,11 +54,15 @@ export function InspectPanel({
             onPress={() => onPick(s.key)}
             style={[styles.row, s.key === activeKey && styles.rowActive]}
           >
-            <Text style={styles.label}>{s.label.split(' · ')[1] ?? 'length'}</Text>
+            <Text style={styles.label}>
+              {s.label.split(' · ')[1] ?? 'length'}
+              {s.optional ? ' (optional)' : ''}
+            </Text>
             {s.value !== null ? (
               <>
                 <Text style={styles.value}>
-                  {formatFeetInches(s.value)} <Text style={styles.mm}>· {formatMillimetres(s.value)}</Text>
+                  {s.detail ? formatLength(s.value, 'imperial', true) : formatFeetInches(s.value)}{' '}
+                  <Text style={styles.mm}>· {formatMillimetres(s.value, s.detail ? 2 : 0)}</Text>
                 </Text>
                 <Text style={styles.meta}>
                   {[s.dim?.source, s.dim?.device, time(s.dim?.capturedAt), s.dim?.capturedBy]

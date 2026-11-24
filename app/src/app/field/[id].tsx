@@ -1,5 +1,7 @@
 import {
+  SimulatedCaliper,
   SimulatedTape,
+  requiredProgress,
   closureCheck,
   featureFits,
   featureNames,
@@ -80,6 +82,7 @@ export default function FieldLayout() {
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const tape = useMemo(() => new SimulatedTape(), []);
+  const caliper = useMemo(() => new SimulatedCaliper(), []);
   const created = useRef(false);
 
   // A new layout is created by its first op, locally first, so this works without signal.
@@ -144,7 +147,14 @@ export default function FieldLayout() {
 
   // Readings arrive from the device, not from the button handler, exactly as a Bluetooth tape would.
   const onReading = useEffectEvent((r: Reading) => record(r.value, r.source, r.device));
-  useEffect(() => tape.onReading((r) => onReading(r)), [tape]);
+  useEffect(() => {
+    const offTape = tape.onReading((r) => onReading(r));
+    const offCaliper = caliper.onReading((r) => onReading(r));
+    return () => {
+      offTape();
+      offCaliper();
+    };
+  }, [tape, caliper]);
 
   const tapWhileMeasuring = (p: Pt, radius: number) => {
     if (!layout) return;
@@ -220,7 +230,9 @@ export default function FieldLayout() {
   const armedFeatureId = armed?.target.kind === 'feature' ? armed.target.featureId : null;
   const armedFeature = armedFeatureId ? layout?.features[armedFeatureId] : undefined;
   const names = layout ? featureNames(layout) : {};
-  const measuredCount = slots.filter((s) => s.value !== null).length;
+  const progress = requiredProgress(slots);
+  // Fine detail (post size) is taken with calipers; everything else with the tape.
+  const device = armed?.detail ? caliper : tape;
 
   const header = (
     <ScreenHeader
@@ -307,12 +319,13 @@ export default function FieldLayout() {
             />
             <MeasurePanel
               slot={armed}
-              measuredCount={measuredCount}
-              totalCount={slots.length}
+              measuredCount={progress.measured}
+              totalCount={progress.total}
+              deviceLabel={armed?.detail ? 'CALIPER' : 'TAPE'}
               nextReading={nextReading}
               realisticError={realisticError}
               closure={closureCheck(layout)}
-              onTape={() => tape.press(nextReading, realisticError)}
+              onTape={() => device.press(nextReading, realisticError)}
               onManual={() => setKeypad('manual')}
               onEditNext={() => setKeypad('next')}
               onToggleError={setRealisticError}
