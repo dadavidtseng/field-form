@@ -1,4 +1,5 @@
 import { ServerMsg, type ClientMsg } from '@field-form/shared';
+import { onNetworkBack } from './networkWatch';
 
 export type SocketStatus = 'connecting' | 'open' | 'offline';
 
@@ -20,6 +21,7 @@ export class ReconnectingSocket {
   private running = false;
   private attempt = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopWatchingNetwork: (() => void) | null = null;
 
   constructor(
     private readonly url: string,
@@ -31,17 +33,32 @@ export class ReconnectingSocket {
     if (this.running) return;
     this.running = true;
     this.attempt = 0;
+    this.stopWatchingNetwork = onNetworkBack(() => this.retryNow());
     this.open();
   }
 
   /** Disconnect and stop reconnecting. Idempotent. */
   stop(): void {
     this.running = false;
+    this.stopWatchingNetwork?.();
+    this.stopWatchingNetwork = null;
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     const ws = this.ws;
     this.ws = null;
     ws?.close();
+  }
+
+  /**
+   * The network just came back: skip the remaining backoff and connect now. Does nothing
+   * while a connection is open or already being made.
+   */
+  private retryNow(): void {
+    if (!this.running || !this.retryTimer) return;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    this.attempt = 0;
+    this.open();
   }
 
   /** Drop the current connection and reconnect, e.g. to replay after a sequence gap. */
@@ -84,6 +101,13 @@ export class ReconnectingSocket {
     // Exponential backoff with jitter (capped) so many devices don't reconnect in lockstep after an outage.
     const base = Math.min(MAX_BACKOFF_MS, 500 * 2 ** this.attempt);
     this.attempt += 1;
-    this.retryTimer = setTimeout(() => this.open(), base / 2 + Math.random() * (base / 2));
+    this.retryTimer = setTimeout(
+      () => {
+        // Cleared first: a pending timer is how retryNow() knows a reconnect is still waiting.
+        this.retryTimer = null;
+        this.open();
+      },
+      base / 2 + Math.random() * (base / 2),
+    );
   }
 }
