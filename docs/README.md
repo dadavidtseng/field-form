@@ -2,7 +2,7 @@
 
 A field crew lead draws a space on a phone or tablet, marks its doors, windows, openings, steps and posts, and fills in the measurements from a (simulated) Bluetooth tape, a caliper or a keypad. An estimator in the office watches it arrive live on an iPad, with pan, zoom and tap-to-inspect, and can comment back.
 
-It is an Expo app that runs in **Expo Go (SDK 58)**, with a small Node sync server you run yourself. There is no backend-as-a-service.
+It is an Expo app that runs in **Expo Go (SDK 58)**, with a small Node sync server you run yourself. There is no backend-as-a-service. Design decisions, packages and cuts are in [NOTES.md](NOTES.md).
 
 ## Quick start
 
@@ -29,7 +29,7 @@ A five-minute walkthrough that touches every part:
 
 | Step | Field device | Office device |
 |---|---|---|
-| 1 | Tap where the corners are. Tap the first corner again to **Close shape** (or **Done: open line** for a fence). | The outline appears as it is drawn. Dashed walls are sketch estimates, marked `~`. |
+| 1 | Tap where the corners are. Tap the first corner again to **Close shape** (or **Done: open line** for a fence). | The outline appears when the shape is closed. Dashed walls are sketch estimates, marked `~`. |
 | 2 | Press the big tape button. The reading fills the highlighted wall and moves on to the next one. Tap the next reading to edit what the simulated tape sends; **Type** opens a keypad (`12' 4-3/8"`, `3760 mm`). | Each wall turns solid and the shape re-flows to its true length. The changed element flashes. |
 | 3 | Add a door, window, opening, step or post, then measure its width and its position. | Tap a wall or feature to see its value in ft-in and mm, how it was taken (tape, caliper, typed) and when. |
 | 4 | — | Leave a comment on a wall, such as **Verify**. |
@@ -90,8 +90,11 @@ flowchart LR
     Store <--> WS[Sync client]
   end
   WS <-->|JSON over WebSocket| Server[Sync server<br/>ws + node:sqlite]
+  Claude([Claude]) <-->|stdio| MCP[MCP server<br/>office role: read + comment]
+  MCP <-->|JSON over WebSocket| Server
   Shared[[shared: model, ops, geometry,<br/>units, protocol]] -.-> Store
   Shared -.-> Server
+  Shared -.-> MCP
 ```
 
 - **One reducer on both sides.** Every change is an *op* (`wall.add`, `dimension.set`, `comment.add`, …). The app and the server apply ops with the same pure function, [`applyOp`](../shared/src/ops.ts), so they can't disagree about what an edit means. Undo sends the inverse op as a new edit.
@@ -109,7 +112,7 @@ field-form/
   server/   Node sync server: WebSocket + SQLite op log
   shared/   Pure TypeScript used by both: model, ops, geometry, units, protocol
   mcp/      MCP server so Claude can read spaces and comment
-  docs/     This README
+  docs/     This README and NOTES.md
 ```
 
 The parts most likely to be subtly wrong have unit tests: unit parsing and formatting, wall geometry and closure, every op and its inverse, the sync state machine, and the server's replay and rejection rules.
