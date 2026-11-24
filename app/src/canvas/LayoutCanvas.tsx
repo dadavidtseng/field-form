@@ -1,4 +1,4 @@
-import { UM_PER_INCH, bounds, feet, type Layout, type Pt } from '@field-form/shared';
+import { UM_PER_INCH, bounds, feet, type Guide, type Layout, type Pt } from '@field-form/shared';
 import {
   Canvas,
   Circle,
@@ -44,6 +44,8 @@ interface Props {
   onTap?: (world: Pt, umPerPx: number) => void;
   /** Corners tapped so far in a sketch that is not committed yet (world µm). */
   draft?: Pt[];
+  /** The distance Dana is about to measure, drawn as a dimension line from the yellow corner. */
+  guide?: Guide | null;
 }
 
 const EMPTY_FRAME = { minX: -feet(10), minY: -feet(10), maxX: feet(10), maxY: feet(10) };
@@ -53,7 +55,7 @@ const EMPTY_FRAME = { minX: -feet(10), minY: -feet(10), maxX: feet(10), maxY: fe
  * (pan/zoom run on the UI thread, no React re-render per frame); line widths and labels
  * stay a constant size on screen so they read at any zoom.
  */
-export function LayoutCanvas({ layout, selectedId, onTap, draft }: Props) {
+export function LayoutCanvas({ layout, selectedId, onTap, draft, guide }: Props) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const scale = useSharedValue(1);
   const tx = useSharedValue(0);
@@ -193,6 +195,7 @@ export function LayoutCanvas({ layout, selectedId, onTap, draft }: Props) {
                   />
                 ))}
               </Group>
+              {guide && <GuideShape guide={guide} scale={scale} tx={tx} ty={ty} />}
               {font &&
                 scene.labels.map((l) => <WallLabel key={l.key} label={l} font={font} scale={scale} tx={tx} ty={ty} />)}
             </>
@@ -286,6 +289,60 @@ function WallLabel({
     <Group transform={transform}>
       <Rect rect={backdrop} color={color.paper} opacity={0.85} />
       <Text x={0} y={0} text={label.text} font={font} color={color.ink} />
+    </Group>
+  );
+}
+
+const GUIDE_OFFSET_PX = 22;
+
+/**
+ * A plan-style dimension line: the yellow corner it is measured from, a blue line with end
+ * dots for the distance, drawn just outside the wall so it never hides the wall or the door.
+ * Drawn in screen space (from shared values) so its thickness and offset hold at any zoom.
+ */
+function GuideShape({
+  guide,
+  scale,
+  tx,
+  ty,
+}: {
+  guide: Guide;
+  scale: SharedValue<number>;
+  tx: SharedValue<number>;
+  ty: SharedValue<number>;
+}) {
+  // World (µm, y up) → screen px. Each derived value reads scale/tx/ty itself: Reanimated only
+  // re-runs a derived value for shared values read directly in it, not inside a helper call.
+  const ax = guide.a.x / UM_PER_INCH;
+  const ay = guide.a.y / UM_PER_INCH;
+  const bx = guide.b.x / UM_PER_INCH;
+  const by = guide.b.y / UM_PER_INCH;
+  const cxIn = guide.corner.x / UM_PER_INCH;
+  const cyIn = guide.corner.y / UM_PER_INCH;
+  const pushX = guide.normal.x * GUIDE_OFFSET_PX;
+  const pushY = -guide.normal.y * GUIDE_OFFSET_PX;
+
+  const a = useDerivedValue(() => ({
+    x: ax * scale.get() + tx.get() + pushX,
+    y: -ay * scale.get() + ty.get() + pushY,
+  }));
+  const b = useDerivedValue(() => ({
+    x: bx * scale.get() + tx.get() + pushX,
+    y: -by * scale.get() + ty.get() + pushY,
+  }));
+  const aX = useDerivedValue(() => ax * scale.get() + tx.get() + pushX);
+  const aY = useDerivedValue(() => -ay * scale.get() + ty.get() + pushY);
+  const bX = useDerivedValue(() => bx * scale.get() + tx.get() + pushX);
+  const bY = useDerivedValue(() => -by * scale.get() + ty.get() + pushY);
+  const cX = useDerivedValue(() => cxIn * scale.get() + tx.get());
+  const cY = useDerivedValue(() => -cyIn * scale.get() + ty.get());
+  return (
+    <Group>
+      <Circle cx={cX} cy={cY} r={20} color={color.active} />
+      <Circle cx={cX} cy={cY} r={20} color={color.ink} style="stroke" strokeWidth={3} />
+      <Line p1={a} p2={b} color={color.guide} strokeWidth={5} strokeCap="round" />
+      <Circle cx={aX} cy={aY} r={8} color={color.guide} />
+      <Circle cx={bX} cy={bY} r={8} color={color.guide} />
     </Group>
   );
 }

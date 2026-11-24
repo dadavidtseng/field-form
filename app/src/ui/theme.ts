@@ -5,6 +5,8 @@ export const color = {
   muted: '#4A4A4A',
   line: '#D0D0D0',
   active: '#FFC400',
+  /** Dimension lines showing what to measure: strong blue reads in sun and is distinct from the yellow selection. */
+  guide: '#0047CC',
   ok: '#1B7F3B',
   warn: '#B26A00',
   bad: '#B3261E',
