@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFollowDana, useFollowStore } from '../state/follow';
+import { useFollowField, useFollowStore } from '../state/follow';
 import { useLayoutIndex, type LayoutRow } from '../sync/useLayoutIndex';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { UnitToggle } from '../ui/UnitToggle';
@@ -22,7 +22,7 @@ export default function LayoutList() {
   const { layouts, rows } = useLayoutIndex(role);
   const follow = useFollowStore((s) => s.follow);
   const setFollow = useFollowStore((s) => s.setFollow);
-  useFollowDana(role === 'office' ? layouts : [], null);
+  useFollowField(role === 'office' ? layouts : [], null);
 
   const open = (id: string) =>
     router.push({ pathname: role === 'field' ? '/field/[id]' : '/office/[id]', params: { id } });
@@ -40,7 +40,7 @@ export default function LayoutList() {
           <>
             {role === 'office' && (
               <View style={styles.follow}>
-                <Text style={styles.followText}>Follow Dana</Text>
+                <Text style={styles.followText}>Follow field</Text>
                 <Switch value={follow} onValueChange={setFollow} />
               </View>
             )}

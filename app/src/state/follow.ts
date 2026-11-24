@@ -18,10 +18,10 @@ export const useFollowStore = create<FollowState>((set) => ({
 }));
 
 /**
- * "Follow Dana": when a field device opens a different layout, take the office there.
+ * "Follow field": when a field device opens a different layout, take the office there.
  * Only reacts to a *new* live layout, so Marcus can leave one without being pulled back in.
  */
-export function useFollowDana(layouts: LayoutSummary[], currentId: string | null) {
+export function useFollowField(layouts: LayoutSummary[], currentId: string | null) {
   const follow = useFollowStore((s) => s.follow);
   const lastFollowedId = useFollowStore((s) => s.lastFollowedId);
   const liveId = layouts.find((l) => l.live)?.id ?? null;

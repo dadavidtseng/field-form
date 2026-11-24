@@ -17,7 +17,7 @@ import { CommentsPanel } from '../../comments/CommentsPanel';
 import { commentsOn, pinsFor } from '../../comments/targets';
 import { InspectPanel, type Selection } from '../../office/InspectPanel';
 import { useChangeFlash } from '../../office/useChangeFlash';
-import { useFollowDana, useFollowStore } from '../../state/follow';
+import { useFollowField, useFollowStore } from '../../state/follow';
 import { useLayoutIndex } from '../../sync/useLayoutIndex';
 import { useLayoutSync } from '../../sync/useLayoutSync';
 import { ScreenHeader } from '../../ui/ScreenHeader';
@@ -39,9 +39,11 @@ export default function OfficeLayout() {
   const flashIds = useChangeFlash(layout);
   // iPad-class widths (and phones in landscape) get a side panel; narrow screens get it below.
   const wide = useWindowDimensions().width >= breakpoints.sideBySideFrom;
-  useFollowDana(layouts, id);
+  useFollowField(layouts, id);
 
-  const live = layouts.find((l) => l.id === id)?.live ?? false;
+  // Field devices on this space right now; wording scales from one crew lead to a whole crew.
+  const inField = sync.presence.field;
+  const liveText = inField === 0 ? null : inField === 1 ? '● Field editing' : `● ${inField} in the field`;
   const slots = useMemo(() => (layout ? measureSlots(layout) : []), [layout]);
 
   // What the tapped element's panel shows. Rebuilt on every change, so values update live.
@@ -111,7 +113,7 @@ export default function OfficeLayout() {
         onBack={() => router.back()}
         right={
           <>
-            {live && <Text style={styles.live}>● Dana editing</Text>}
+            {liveText && <Text style={styles.live}>{liveText}</Text>}
             <View style={styles.follow}>
               <Text style={styles.followText}>Follow</Text>
               <Switch value={follow} onValueChange={setFollow} />
@@ -130,7 +132,7 @@ export default function OfficeLayout() {
           <View style={styles.canvasArea}>
             {canvas}
             {layout && layout.outline.walls.length === 0 && (
-              <Text style={styles.hint}>Waiting for Dana to draw this space…</Text>
+              <Text style={styles.hint}>Waiting for the field to draw this space…</Text>
             )}
           </View>
           {layout && layout.outline.walls.length > 0 && (
