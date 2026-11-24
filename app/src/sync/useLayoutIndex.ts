@@ -12,14 +12,17 @@ export type LayoutRow = LayoutSummary & { unsynced?: boolean };
 
 interface IndexSnapshot {
   layouts: LayoutSummary[];
+  /** False until the server's first list arrives (e.g. the app was restarted with no signal). */
+  received: boolean;
   status: SocketStatus;
 }
 
 /**
- * Spaces saved on this device with edits the server has not seen (e.g. created with no signal),
- * so Dana can find and continue them before they sync.
+ * Spaces saved on this device that the server's list does not show. Before the server has
+ * answered, that is every saved space, so an offline restart still lists the day's work;
+ * afterwards only those with edits the server has not seen (e.g. created with no signal).
  */
-function unsyncedLocalSpaces(known: Set<string>): LayoutRow[] {
+function localSpaces(known: Set<string>, includeSynced: boolean): LayoutRow[] {
   let saved: ReturnType<typeof sqliteStorage.list>;
   try {
     saved = sqliteStorage.list();
@@ -28,7 +31,8 @@ function unsyncedLocalSpaces(known: Set<string>): LayoutRow[] {
   }
   const rows: LayoutRow[] = [];
   for (const { layoutId, savedAt, state } of saved) {
-    if (known.has(layoutId) || state.pending.length === 0) continue;
+    const unsynced = state.pending.length > 0;
+    if (known.has(layoutId) || (!unsynced && !includeSynced)) continue;
     const view: LayoutDoc = restoreState<LayoutDoc, Op>(state.confirmed, state.lastSeq, state.pending, applyOp).state
       .view;
     if (!view || view.archived) continue;
@@ -41,7 +45,7 @@ function unsyncedLocalSpaces(known: Set<string>): LayoutRow[] {
       walls: view.outline.walls.length + (closed ? 1 : 0),
       closed,
       live: false,
-      unsynced: true,
+      unsynced,
     });
   }
   return rows;
@@ -50,11 +54,11 @@ function unsyncedLocalSpaces(known: Set<string>): LayoutRow[] {
 /** Live list of every layout, most recently edited first, pushed by the server. */
 export function useLayoutIndex(role: Role): IndexSnapshot & { rows: LayoutRow[] } {
   const { store, socket } = useMemo(() => {
-    const store = createStore<IndexSnapshot>(() => ({ layouts: [], status: 'connecting' }));
+    const store = createStore<IndexSnapshot>(() => ({ layouts: [], received: false, status: 'connecting' }));
     const socket: ReconnectingSocket = new ReconnectingSocket(syncUrl(), {
       onOpen: () => socket.send({ type: 'watchIndex', clientId: CLIENT_ID, role }),
       onMessage: (msg) => {
-        if (msg.type === 'index') store.setState({ layouts: msg.layouts });
+        if (msg.type === 'index') store.setState({ layouts: msg.layouts, received: true });
       },
       onStatus: (status) => store.setState({ status }),
     });
@@ -67,12 +71,12 @@ export function useLayoutIndex(role: Role): IndexSnapshot & { rows: LayoutRow[] 
   }, [socket]);
 
   const snapshot = useStore(store);
-  // Only the field creates spaces, so only the field has local-only ones to show.
   const rows = useMemo<LayoutRow[]>(() => {
-    if (role !== 'field') return snapshot.layouts;
-    const local = unsyncedLocalSpaces(new Set(snapshot.layouts.map((l) => l.id)));
-    return [...local, ...snapshot.layouts];
-  }, [role, snapshot.layouts]);
+    // Once the server has answered, only the field can have spaces it hasn't seen (it creates them).
+    if (snapshot.received && role !== 'field') return snapshot.layouts;
+    const local = localSpaces(new Set(snapshot.layouts.map((l) => l.id)), !snapshot.received);
+    return [...local, ...snapshot.layouts].sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [role, snapshot.layouts, snapshot.received]);
 
   return { ...snapshot, rows };
 }
