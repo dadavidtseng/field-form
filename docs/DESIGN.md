@@ -13,7 +13,7 @@ These are the assumptions sent to Josh on 2026-11-23. Revisit them if he answers
 
 | # | Assumption | Consequence |
 |---|---|---|
-| A1 | Sync is one-to-one (Dana → Marcus) first. The protocol does not prevent N clients. | Server broadcasts to every subscriber of a layout. Conflicts resolve last-writer-wins per field by server order. |
+| A1 | Many-to-many: any number of field and office devices may open the same space. One field writer per space is the common case. | Server broadcasts every commit to every device on a layout and pushes presence counts per role. Conflicts resolve last-writer-wins per field by server order. Without login (A8), devices are identified by role, not by person. |
 | A2 | Dana can work offline. Her edits sync when she reconnects. | Local op outbox, persisted on the device, replayed idempotently. |
 | A3 | Marcus views and inspects but **cannot change geometry**. Both Dana and Marcus can comment (a stretch goal). | The server rejects geometry ops from the `office` role. The field is the single source of truth. Comments are a separate op type that never touches geometry. |
 | A4 | Reviewers may use physical devices or emulators. | The sync host is detected automatically from Expo's `hostUri`, with a manual override. |
@@ -112,7 +112,7 @@ Both roles start on the same **layout list**, served by the sync server. Nobody 
 
 - The list shows every layout, **most recently edited first**, with its kind (Room, Deck, Patio, Fence), last editor, and a **● live** marker while a field device is editing it.
 - **Dana** creates a layout with one tap (§4.4); it is created locally first, so this works offline and the layout appears on the server when she reconnects.
-- **Marcus** sees a new layout appear at the top of his list the moment Dana creates it. A **Follow Dana** toggle (on by default) opens it automatically, so when Dana moves to the next space of the day, Marcus's screen follows without him doing anything. Turning it off keeps him on the layout he is reviewing.
+- **Marcus** sees a new layout appear at the top of his list the moment Dana creates it. A **Follow field** toggle (on by default) opens it automatically, so when Dana moves to the next space of the day, Marcus's screen follows without him doing anything. Turning it off keeps him on the layout he is reviewing.
 - The list updates live over the same WebSocket (§7), not by polling.
 
 ### 4.7 Comments: a two-way thread pinned to the layout
@@ -282,7 +282,7 @@ The server checks every submit in three layers, and each failure has its own cod
 
 ### Other rules
 
-- **Layout list:** on connect, every client sends `subscribeIndex` and receives `index {layouts: [{id, name, kind, updatedAt, lastEditor, live}]}`. The server pushes `indexChanged` whenever a layout is created, renamed, edited, or a field device opens or leaves it. "Follow Dana" is purely client-side: when `indexChanged` reports a different layout as live from a field device, the office app opens it.
+- **Layout list:** on connect, every client sends `subscribeIndex` and receives `index {layouts: [{id, name, kind, updatedAt, lastEditor, live}]}`. The server pushes `indexChanged` whenever a layout is created, renamed, edited, or a field device opens or leaves it. "Follow field" is purely client-side: when `indexChanged` reports a different layout as live from a field device, the office app opens it.
 - **Conflicts:** with one field writer (A1) there are effectively none. With N writers, per-field last-writer-wins by server sequence applies, and an op that targets a deleted entity is rejected with `conflict` (see the rejection contract). This limitation is documented, not hidden.
 - **Transport:** plain WebSocket. React Native has it built in, and the server uses `ws`. Reconnect uses exponential backoff with jitter, capped at 10 s, plus an immediate retry when NetInfo reports the network is back.
 - **Server discovery:** read the host from `Constants.expoConfig.hostUri` and use port `8787`. On Android, `localhost`/`127.0.0.1` is mapped to `10.0.2.2`. The Settings screen allows a manual override.
@@ -329,7 +329,7 @@ Build top to bottom. If time runs out, cut from the bottom. The last row is neve
 | Priority | Item |
 |---|---|
 | P0 | Expo compatibility gate, monorepo skeleton, Expo Go app on two emulators, one op syncing field → office. |
-| P0 | Shared layout list with live updates and one-tap create; Follow Dana on the office side. |
+| P0 | Shared layout list with live updates and one-tap create; Follow field on the office side. |
 | P0 | Sketch mode (Mode A): tap corners with snapping; tape (predictable simulator) and manual input fill armed slots; measured lengths re-flow the shape; closing, closure error, undo. Usable on phone and tablet. |
 | P0 | **Basic features:** door, window, opening, step (offset + width) and post (x + y offsets), with auto-advancing armed slots. |
 | P0 | Office view: live canvas, pan/zoom, tap-to-inspect panel. |
@@ -349,7 +349,7 @@ Build top to bottom. If time runs out, cut from the bottom. The last row is neve
 3. Layout list and one canvas renderer with pan/zoom, used by both screens.
 4. Sketch mode with the predictable tape simulator, manual keypad and undo.
 5. Basic features (door, window, opening, step, post).
-6. Office view: live updates, Follow Dana and tap-to-inspect. **After this step the minimum demo works end to end and could be submitted:** draw → mark features → attach measurements → see it live on Marcus's device → pan, zoom, inspect.
+6. Office view: live updates, Follow field and tap-to-inspect. **After this step the minimum demo works end to end and could be submitted:** draw → mark features → attach measurements → see it live on Marcus's device → pan, zoom, inspect.
 7. P1 items (offline replay first), then P2, then P3. Commit and push after each step.
 
 **Cut outright (go on the "next week" list):** curved walls and freehand strokes, multiple outlines or islands per layout, photo attachments (stored as files with a reference in the DB), cut list and material takeoff, real BLE via a development build, auth and multi-tenant jobs, PDF/DXF export, 3D view.
