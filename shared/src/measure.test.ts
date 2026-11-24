@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Layout } from './model';
 import { applyOp } from './ops';
 import { closureCheck, closureLevel, layoutSummary, measureSlots, nextUnmeasured } from './measure';
-import { SimulatedTape } from './tape';
+import { SimulatedCaliper, SimulatedTape } from './tape';
 import { room12x10 } from './test-helpers';
-import { feet, inches } from './units';
+import { feet, inches, mm } from './units';
 
 const measure = (doc: Layout, wallId: string | null, value: number): Layout =>
   applyOp(doc, {
@@ -86,6 +86,16 @@ describe('simulated tape', () => {
     expect(run()).toEqual(a);
     for (const v of a) expect(Math.abs(v - feet(10))).toBeLessThanOrEqual(inches(1 / 8));
     expect(new Set(a).size).toBeGreaterThan(1);
+  });
+
+  it('calipers read to 0.01 mm, within ±0.05 mm, labelled as caliper', () => {
+    const caliper = new SimulatedCaliper(3, () => 0);
+    const readings = [1, 2, 3, 4, 5].map(() => caliper.press(mm(89.123), true));
+    for (const r of readings) {
+      expect(r.source).toBe('caliper');
+      expect(r.value % 10).toBe(0);
+      expect(Math.abs(r.value - mm(89.12))).toBeLessThanOrEqual(50);
+    }
   });
 
   it('notifies listeners', () => {

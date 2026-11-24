@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { placePost, placeWallFeature, featureNames } from './features';
 import { featureFits, measureGuide, postPosition, wallFeatureSpan } from './geometry';
-import { measureSlots, nextUnmeasured } from './measure';
+import { measureSlots, nextUnmeasured, requiredProgress } from './measure';
 import type { Feature, Layout } from './model';
 import { applyOp } from './ops';
 import { room12x10 } from './test-helpers';
@@ -91,9 +91,34 @@ describe('measuring features', () => {
     expect(labels.slice(4)).toEqual([
       'Door 1 · width',
       'Door 1 · from the yellow corner',
+      'Door 1 · height',
       'Post 1 · along the wall from the yellow corner',
       'Post 1 · out from that wall',
+      'Post 1 · size',
     ]);
+  });
+
+  it('optional extras are never auto-armed and never count toward "ready to quote"', () => {
+    let doc = add(room(), placeWallFeature(room(), 'w1', 'door', 'd1'));
+    const measureField = (field: string) =>
+      (doc = applyOp(doc, {
+        t: 'dimension.set',
+        target: { kind: 'feature', featureId: 'd1', field },
+        dim: { value: inches(36) },
+      }) as Layout);
+    measureField('width');
+    measureField('offset');
+    const slots = measureSlots(doc);
+    expect(nextUnmeasured(slots, 'feature:d1:offset')?.key).not.toBe('feature:d1:height');
+    expect(requiredProgress(slots)).toEqual({ measured: 2, total: 6 }); // 4 walls + door width/offset
+  });
+
+  it('post size is a detail measurement (calipers), the others are not', () => {
+    const doc = add(room(), placePost(room(), { x: feet(11), y: feet(3) }, 'p1'));
+    const detail = measureSlots(doc)
+      .filter((s) => s.detail)
+      .map((s) => s.label);
+    expect(detail).toEqual(['Post 1 · size']);
   });
 
   it('after the last wall, auto-advance moves on to the first feature', () => {

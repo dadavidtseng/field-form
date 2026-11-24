@@ -28,22 +28,53 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** Error is whole 32nds of an inch, at most 4 (1/8"). Counted in 32nds, converted once, so it never drifts. */
-const MAX_ERROR_32NDS = 4;
-
 /**
  * Stands in for the button on a Bluetooth tape. `press(value)` emits that reading, optionally
  * with up to ±1/8" of error. The error is seeded, so a demo or test replays identically.
  */
-export class SimulatedTape implements ReadingSource {
-  readonly device = 'Simulated tape';
+/** What differs between simulated devices: how they label readings and how fine their error is. */
+interface DeviceSpec {
+  source: Reading['source'];
+  device: string;
+  /** Largest error, in whole steps. */
+  maxErrorSteps: number;
+  /** Converts a whole number of error steps to µm (counted in steps first, so it never drifts). */
+  stepsToUm: (steps: number) => Um;
+  /** The device's display resolution: readings are rounded to it. */
+  resolutionUm: Um;
+}
+
+const TAPE: DeviceSpec = {
+  source: 'tape',
+  device: 'Simulated tape',
+  maxErrorSteps: 4, // ±1/8" in 32nds
+  stepsToUm: (n) => inches(n / 32),
+  resolutionUm: 1,
+};
+
+const CALIPER: DeviceSpec = {
+  source: 'caliper',
+  device: 'Simulated caliper',
+  maxErrorSteps: 5, // ±0.05 mm in hundredths
+  stepsToUm: (n) => n * 10,
+  resolutionUm: 10, // 0.01 mm
+};
+
+/**
+ * Stands in for a Bluetooth measuring tool's button. `press(value)` emits that reading, optionally
+ * with a small error. The error is seeded, so a demo or test replays identically.
+ */
+export class SimulatedDevice implements ReadingSource {
+  readonly device: string;
   private readonly listeners = new Set<(r: Reading) => void>();
   private random: () => number;
 
   constructor(
+    private readonly spec: DeviceSpec,
     private readonly seed = 42,
     private readonly now: () => number = Date.now,
   ) {
+    this.device = spec.device;
     this.random = mulberry32(seed);
   }
 
@@ -53,12 +84,12 @@ export class SimulatedTape implements ReadingSource {
   }
 
   press(value: Um, realisticError = false): Reading {
-    let v = value;
+    let v = Math.round(value / this.spec.resolutionUm) * this.spec.resolutionUm;
     if (realisticError) {
-      const thirtySeconds = Math.round((this.random() * 2 - 1) * MAX_ERROR_32NDS);
-      v = Math.max(0, value + inches(thirtySeconds / 32));
+      const steps = Math.round((this.random() * 2 - 1) * this.spec.maxErrorSteps);
+      v = Math.max(0, v + this.spec.stepsToUm(steps));
     }
-    const reading: Reading = { value: v, source: 'tape', device: this.device, at: this.now() };
+    const reading: Reading = { value: v, source: this.spec.source, device: this.device, at: this.now() };
     for (const l of this.listeners) l(reading);
     return reading;
   }
@@ -66,5 +97,19 @@ export class SimulatedTape implements ReadingSource {
   /** Restart the error sequence, e.g. before recording a demo. */
   reset(): void {
     this.random = mulberry32(this.seed);
+  }
+}
+
+/** A tape measure: up to ±1/8" of error. */
+export class SimulatedTape extends SimulatedDevice {
+  constructor(seed = 42, now: () => number = Date.now) {
+    super(TAPE, seed, now);
+  }
+}
+
+/** Calipers for fine detail: 0.01 mm resolution, up to ±0.05 mm of error. */
+export class SimulatedCaliper extends SimulatedDevice {
+  constructor(seed = 7, now: () => number = Date.now) {
+    super(CALIPER, seed, now);
   }
 }
