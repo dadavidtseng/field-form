@@ -37,3 +37,4 @@ npm-debug.log*
 
 # Local-only working notes
 docs/DESIGN.md
+docs/demo-script.md
