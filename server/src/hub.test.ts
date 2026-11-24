@@ -74,6 +74,29 @@ describe('Hub layout index', () => {
   });
 });
 
+describe('Hub comments', () => {
+  it("the office's comment commits and reaches the field; its geometry edit does not", () => {
+    const hub = new Hub(openSqliteStore(':memory:'));
+    const dana = client(hub);
+    const marcus = client(hub);
+    dana.send(hello('field'));
+    marcus.send(hello('office'));
+    dana.send({ type: 'submit', opId: 'op1', op: create });
+    marcus.send({
+      type: 'submit',
+      opId: 'c1',
+      op: {
+        t: 'comment.add',
+        comment: { id: 'c1', target: null, tag: 'verify', by: 'office', at: 0, resolved: false },
+      },
+    });
+    marcus.send({ type: 'submit', opId: 'r1', op: { t: 'layout.rename', name: 'Hack' } });
+
+    expect(dana.inbox.some((m) => m.type === 'commit' && m.op.t === 'comment.add')).toBe(true);
+    expect(marcus.inbox.find((m) => m.type === 'reject')).toMatchObject({ opId: 'r1', code: 'forbidden' });
+  });
+});
+
 describe('Hub contract', () => {
   it('broadcasts one commit to every subscriber, author included', () => {
     const hub = new Hub(openSqliteStore(':memory:'));
