@@ -27,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayoutCanvas } from '../../canvas/LayoutCanvas';
 import { FeatureBar } from '../../field/FeatureBar';
@@ -42,6 +42,9 @@ import { StatusBadge } from '../../ui/StatusBadge';
 import { TOUCH, color } from '../../ui/theme';
 
 const TAP_RADIUS_PX = 32;
+/** `armedKey` value meaning "deliberately nothing selected". */
+const NOTHING = 'nothing';
+const COMPACT_BELOW_WIDTH = 500;
 
 const KIND_LABEL: Record<LayoutKind, string> = {
   room: 'Room',
@@ -56,6 +59,8 @@ const timeLabel = () => new Date().toLocaleTimeString([], { hour: 'numeric', min
 /** Dana's screen: sketch the outline by tapping corners, then measure what was drawn. */
 export default function FieldLayout() {
   useKeepAwake();
+  // Phones get compact header controls so the space's name stays readable.
+  const compact = useWindowDimensions().width < COMPACT_BELOW_WIDTH;
   const { id, create } = useLocalSearchParams<{ id: string; create?: LayoutKind }>();
   const sync = useLayoutSync(id, 'field');
   const layout = sync.view;
@@ -83,7 +88,10 @@ export default function FieldLayout() {
 
   const sketching = !!layout && layout.outline.walls.length === 0;
   const slots = useMemo(() => (layout ? measureSlots(layout) : []), [layout]);
-  const armed: Slot | null = slots.find((s) => s.key === armedKey) ?? nextUnmeasured(slots);
+  // No explicit choice → arm the next empty slot (keeps TAPE → TAPE flowing). An explicit
+  // "nothing" (tap on empty space) arms nothing until Dana taps a wall or feature.
+  const armed: Slot | null =
+    armedKey === NOTHING ? null : (slots.find((s) => s.key === armedKey) ?? nextUnmeasured(slots));
   const nextReading = nextOverride ?? armed?.estimateUm ?? 0;
   const slotsOf = (featureId: string) =>
     slots.filter((s) => s.target.kind === 'feature' && s.target.featureId === featureId);
@@ -138,7 +146,12 @@ export default function FieldLayout() {
     if (!layout) return;
     if (placingPost) return addPost(p);
     const hit = hitTest(layout, p, radius);
-    if (!hit) return;
+    if (!hit) {
+      setArmedKey(NOTHING); // tap on empty space deselects, as on the office screen
+      setLastWallTap(null);
+      setNextOverride(null);
+      return;
+    }
     setNextOverride(null);
     if (hit.kind === 'feature') {
       const own = slotsOf(hit.id);
@@ -223,9 +236,9 @@ export default function FieldLayout() {
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.undoText}>↶ Undo</Text>
+              <Text style={styles.undoText}>{compact ? '↶' : '↶ Undo'}</Text>
             </Pressable>
-            <StatusBadge status={sync.status} pending={sync.pendingCount} />
+            <StatusBadge status={sync.status} pending={sync.pendingCount} compact={compact} />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Rename or delete this space"

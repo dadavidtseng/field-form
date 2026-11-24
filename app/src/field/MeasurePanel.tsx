@@ -52,8 +52,14 @@ export function MeasurePanel({
           </>
         ) : (
           <>
-            <Text style={styles.armed}>All {totalCount} measured</Text>
-            <Text style={styles.meta}>Tap any wall to re-measure it</Text>
+            <Text style={styles.armed}>
+              {measuredCount < totalCount ? 'Nothing selected' : `All ${totalCount} measured`}
+            </Text>
+            <Text style={styles.meta}>
+              {measuredCount < totalCount
+                ? `${totalCount - measuredCount} still to measure · tap a wall or feature to measure it`
+                : 'Tap any wall or feature to re-measure it'}
+            </Text>
           </>
         )}
         {closure && (
