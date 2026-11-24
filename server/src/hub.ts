@@ -167,14 +167,17 @@ export class Hub {
     return { type: 'index', layouts };
   }
 
-  /** Tell everyone on a space how many field and office devices have it open (any number of each). */
+  /**
+   * Tell everyone on a space how many field and office devices have it open (any number of each).
+   * Counted by client id, so one device with two connections still counts once.
+   */
   private broadcastPresence(layoutId: string): void {
     const here = [...this.subscribers].filter((s) => s.layoutId === layoutId);
     const msg: ServerMsg = {
       type: 'presence',
       layoutId,
-      field: here.filter((s) => s.role === 'field').length,
-      office: here.filter((s) => s.role === 'office').length,
+      field: new Set(here.filter((s) => s.role === 'field').map((s) => s.clientId)).size,
+      office: new Set(here.filter((s) => s.role === 'office').map((s) => s.clientId)).size,
     };
     for (const s of here) s.send(msg);
   }

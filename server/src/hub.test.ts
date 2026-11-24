@@ -99,6 +99,24 @@ describe('Hub presence (many-to-many)', () => {
   });
 });
 
+describe('Hub presence counts devices', () => {
+  it('one device with two connections counts once, and still counts after one closes', () => {
+    const hub = new Hub(openSqliteStore(':memory:'));
+    const dana = client(hub);
+    const marcusA = client(hub);
+    const marcusB = client(hub); // same device, a second screen for the same space
+    dana.send(hello('field', 0, 'dana'));
+    marcusA.send(hello('office', 0, 'marcus'));
+    marcusB.send(hello('office', 0, 'marcus'));
+    const last = () => dana.inbox.filter((m) => m.type === 'presence').at(-1);
+    expect(last()).toMatchObject({ field: 1, office: 1 });
+    marcusB.close();
+    expect(last()).toMatchObject({ field: 1, office: 1 });
+    marcusA.close();
+    expect(last()).toMatchObject({ field: 1, office: 0 });
+  });
+});
+
 describe('Hub comments', () => {
   it("the office's comment commits and reaches the field; its geometry edit does not", () => {
     const hub = new Hub(openSqliteStore(':memory:'));
