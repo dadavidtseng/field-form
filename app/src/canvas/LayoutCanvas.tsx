@@ -23,6 +23,7 @@ import {
   useTapGesture,
 } from 'react-native-gesture-handler';
 import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import { useUnitSystem } from '../state/units';
 import { color } from '../ui/theme';
 import { buildScene, type FeatureMark, type Label } from './scene';
 
@@ -50,7 +51,7 @@ interface Props {
   /** The distance Dana is about to measure, drawn as a dimension line from the yellow corner. */
   guide?: Guide | null;
   /** Open-comment badges (world µm) so both roles can see where questions are. */
-  pins?: { key: string; at: Pt; count: number }[];
+  pins?: { key: string; at: Pt; count: number; inward: Pt }[];
 }
 
 const EMPTY_FRAME = { minX: -feet(10), minY: -feet(10), maxX: feet(10), maxY: feet(10) };
@@ -69,7 +70,8 @@ export function LayoutCanvas({ layout, selectedId, flashIds, onTap, draft, guide
   // Shared value, not a ref: it is written from the UI-thread pan worklet.
   const userMoved = useSharedValue(false);
 
-  const scene = useMemo(() => (layout ? buildScene(layout) : null), [layout]);
+  const system = useUnitSystem();
+  const scene = useMemo(() => (layout ? buildScene(layout, system) : null), [layout, system]);
   // An empty layout frames a 20' square around the origin, so the first sketch taps have room.
   const box = useMemo(() => (layout && bounds(layout)) || EMPTY_FRAME, [layout]);
   const draftIn = useMemo(() => (draft ?? []).map((p) => ({ x: p.x / UM_PER_INCH, y: p.y / UM_PER_INCH })), [draft]);
@@ -204,7 +206,10 @@ export function LayoutCanvas({ layout, selectedId, flashIds, onTap, draft, guide
               {guide && <GuideShape guide={guide} scale={scale} tx={tx} ty={ty} />}
               {font && pins?.map((p) => <PinBadge key={p.key} pin={p} font={font} scale={scale} tx={tx} ty={ty} />)}
               {font &&
-                scene.labels.map((l) => <WallLabel key={l.key} label={l} font={font} scale={scale} tx={tx} ty={ty} />)}
+                scene.labels
+                  // The guide takes the space outside its wall; that wall's length is in the panel.
+                  .filter((l) => l.key !== guide?.wallId)
+                  .map((l) => <WallLabel key={l.key} label={l} font={font} scale={scale} tx={tx} ty={ty} />)}
             </>
           )}
         </Canvas>
@@ -345,7 +350,8 @@ function WallLabel({
   );
 }
 
-const GUIDE_OFFSET_PX = 22;
+const GUIDE_OFFSET_PX = 24;
+const CORNER_RADIUS_PX = 10;
 
 /**
  * A plan-style dimension line: the yellow corner it is measured from, a blue line with end
@@ -388,21 +394,35 @@ function GuideShape({
   const bY = useDerivedValue(() => -by * scale.get() + ty.get() + pushY);
   const cX = useDerivedValue(() => cxIn * scale.get() + tx.get());
   const cY = useDerivedValue(() => -cyIn * scale.get() + ty.get());
+  // Extension lines: from the measured points on the wall out to the dimension line, as on a drawing.
+  const aOnWall = useDerivedValue(() => ({ x: ax * scale.get() + tx.get(), y: -ay * scale.get() + ty.get() }));
+  const bOnWall = useDerivedValue(() => ({ x: bx * scale.get() + tx.get(), y: -by * scale.get() + ty.get() }));
+  const hasOffset = guide.normal.x !== 0 || guide.normal.y !== 0;
   return (
     <Group>
-      <Circle cx={cX} cy={cY} r={20} color={color.active} />
-      <Circle cx={cX} cy={cY} r={20} color={color.ink} style="stroke" strokeWidth={3} />
-      <Line p1={a} p2={b} color={color.guide} strokeWidth={5} strokeCap="round" />
-      <Circle cx={aX} cy={aY} r={8} color={color.guide} />
-      <Circle cx={bX} cy={bY} r={8} color={color.guide} />
+      {hasOffset && (
+        <>
+          <Line p1={aOnWall} p2={a} color={color.guide} strokeWidth={2} />
+          <Line p1={bOnWall} p2={b} color={color.guide} strokeWidth={2} />
+        </>
+      )}
+      <Line p1={a} p2={b} color={color.guide} strokeWidth={4} strokeCap="round" />
+      <Circle cx={aX} cy={aY} r={6} color={color.guide} />
+      <Circle cx={bX} cy={bY} r={6} color={color.guide} />
+      {/* The corner the distance is measured from: small, so it never hides a feature's end. */}
+      <Circle cx={cX} cy={cY} r={CORNER_RADIUS_PX} color={color.active} />
+      <Circle cx={cX} cy={cY} r={CORNER_RADIUS_PX} color={color.ink} style="stroke" strokeWidth={2} />
     </Group>
   );
 }
 
 const PIN_RADIUS_PX = 14;
-const PIN_OFFSET_PX = 18;
+const PIN_OFFSET_PX = 24;
 
-/** An open-comment badge with its count, offset up-right of the element so it never hides it. */
+/**
+ * An open-comment badge with its count, placed on the inside of its wall or feature: labels and
+ * measuring guides are drawn outside, so the two never collide.
+ */
 function PinBadge({
   pin,
   font,
@@ -410,7 +430,7 @@ function PinBadge({
   tx,
   ty,
 }: {
-  pin: { at: Pt; count: number };
+  pin: { at: Pt; count: number; inward: Pt };
   font: SkFont;
   scale: SharedValue<number>;
   tx: SharedValue<number>;
@@ -419,10 +439,13 @@ function PinBadge({
   const xIn = pin.at.x / UM_PER_INCH;
   const yIn = pin.at.y / UM_PER_INCH;
   const label = pin.count > 9 ? '9+' : String(pin.count);
+  // World y is up, screen y is down.
+  const pushX = pin.inward.x * PIN_OFFSET_PX;
+  const pushY = -pin.inward.y * PIN_OFFSET_PX;
   const width = useMemo(() => font.measureText(label).width, [font, label]);
   const transform = useDerivedValue(() => [
-    { translateX: xIn * scale.get() + tx.get() + PIN_OFFSET_PX },
-    { translateY: -yIn * scale.get() + ty.get() - PIN_OFFSET_PX },
+    { translateX: xIn * scale.get() + tx.get() + pushX },
+    { translateY: -yIn * scale.get() + ty.get() + pushY },
   ]);
   return (
     <Group transform={transform}>
