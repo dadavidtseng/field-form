@@ -1,5 +1,7 @@
 # Field Form
 
+[![CI](https://github.com/dadavidtseng/field-form/actions/workflows/ci.yml/badge.svg)](https://github.com/dadavidtseng/field-form/actions/workflows/ci.yml)
+
 A field crew lead draws a space on a phone or tablet, marks its doors, windows, openings, steps and posts, and fills in the measurements from a (simulated) Bluetooth tape, a caliper or a keypad. An estimator in the office watches it arrive live on an iPad, with pan, zoom and tap-to-inspect, and can comment back.
 
 It is an Expo app that runs in **Expo Go (SDK 58)**, with a small Node sync server you run yourself. There is no backend-as-a-service. Design decisions, packages and cuts are in [NOTES.md](NOTES.md).
