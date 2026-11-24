@@ -1,4 +1,4 @@
-import type { LayoutKind, LayoutSummary, Role } from '@field-form/shared';
+import type { LayoutSummary, Role } from '@field-form/shared';
 import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
@@ -7,13 +7,6 @@ import { useFollowDana, useFollowStore } from '../state/follow';
 import { useLayoutIndex } from '../sync/useLayoutIndex';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { TOUCH, color } from '../ui/theme';
-
-const KINDS: { kind: LayoutKind; label: string }[] = [
-  { kind: 'room', label: 'Room' },
-  { kind: 'deck', label: 'Deck' },
-  { kind: 'patio', label: 'Patio' },
-  { kind: 'fence', label: 'Fence' },
-];
 
 function ago(ts: number): string {
   const min = Math.round((Date.now() - ts) / 60_000);
@@ -33,14 +26,14 @@ export default function LayoutList() {
   const open = (id: string) =>
     router.push({ pathname: role === 'field' ? '/field/[id]' : '/office/[id]', params: { id } });
 
-  // One tap creates the layout; the field screen sends `layout.create`, so this works offline too.
-  const create = (kind: LayoutKind) =>
-    router.push({ pathname: '/field/[id]', params: { id: randomUUID(), create: kind } });
+  // One tap creates the space; whether it is a closed shape or an open line (a fence) is decided
+  // by how the sketch is finished. The field screen sends `layout.create`, so this works offline.
+  const create = () => router.push({ pathname: '/field/[id]', params: { id: randomUUID(), create: 'other' } });
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <ScreenHeader
-        title={role === 'field' ? 'Field · Layouts' : 'Office · Layouts'}
+        title={role === 'field' ? 'Field · Spaces' : 'Office · Spaces'}
         onBack={() => router.back()}
         right={
           role === 'office' && (
@@ -53,16 +46,13 @@ export default function LayoutList() {
       />
       {role === 'field' && (
         <View style={styles.newRow}>
-          {KINDS.map((k) => (
-            <Pressable
-              key={k.kind}
-              accessibilityRole="button"
-              onPress={() => create(k.kind)}
-              style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.newText}>+ {k.label}</Text>
-            </Pressable>
-          ))}
+          <Pressable
+            accessibilityRole="button"
+            onPress={create}
+            style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.newText}>+ New space</Text>
+          </Pressable>
         </View>
       )}
       <FlatList
@@ -71,7 +61,7 @@ export default function LayoutList() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            {role === 'field' ? 'No layouts yet. Tap + to start one.' : 'No layouts yet. They appear here live.'}
+            {role === 'field' ? 'No spaces yet. Tap + New space to start.' : 'No spaces yet. They appear here live.'}
           </Text>
         }
         renderItem={({ item }) => <Row item={item} onPress={() => open(item.id)} />}
@@ -92,7 +82,10 @@ function Row({ item, onPress }: { item: LayoutSummary; onPress: () => void }) {
           {item.name}
         </Text>
         <Text style={styles.rowMeta}>
-          {item.kind} · {item.walls} wall{item.walls === 1 ? '' : 's'} · {ago(item.updatedAt)}
+          {item.walls === 0
+            ? 'not drawn yet'
+            : `${item.closed ? 'closed shape' : 'open line'} · ${item.walls} wall${item.walls === 1 ? '' : 's'}`}{' '}
+          · {ago(item.updatedAt)}
         </Text>
       </View>
       {item.live && <Text style={styles.live}>● live</Text>}

@@ -47,7 +47,8 @@ export default function OfficeLayout() {
         }
       />
       <LayoutCanvas layout={sync.view} selectedId={selectedId} onTap={onTap} />
-      {sync.view && sync.view.outline.walls.length === 0 && (
+      {sync.view?.archived && <Text style={styles.deleted}>Deleted in the field</Text>}
+      {sync.view && !sync.view.archived && sync.view.outline.walls.length === 0 && (
         <Text style={styles.hint}>Waiting for Dana to draw this space…</Text>
       )}
     </SafeAreaView>
@@ -59,5 +60,14 @@ const styles = StyleSheet.create({
   live: { fontSize: 18, fontWeight: '800', color: color.ok },
   follow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   followText: { fontSize: 18, fontWeight: '700', color: color.ink },
+  deleted: {
+    padding: 16,
+    fontSize: 22,
+    fontWeight: '800',
+    color: color.bad,
+    textAlign: 'center',
+    borderTopWidth: 3,
+    borderTopColor: color.bad,
+  },
   hint: { position: 'absolute', bottom: 48, alignSelf: 'center', fontSize: 20, color: color.muted },
 });
