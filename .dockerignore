@@ -1,0 +1,13 @@
+# Keep the build context small: the server image needs only the manifests, shared/ and server/.
+**/node_modules
+**/.expo
+**/dist
+.git
+.serena
+docs
+server/data
+app/src
+app/assets
+*.db
+*.db-*
+*.log
