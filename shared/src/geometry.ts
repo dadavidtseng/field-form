@@ -138,6 +138,8 @@ export interface Guide {
   corner: Pt;
   /** Unit direction to push the line off the wall on screen, so it does not sit on top of it. */
   normal: Pt;
+  /** The wall the guide is drawn beside, whose own length label it replaces while shown. */
+  wallId: string | null;
 }
 
 /** True when the inside of the outline is to the left of each wall (drawn counter-clockwise). */
@@ -166,18 +168,25 @@ export function measureGuide(layout: Layout, target: DimensionTarget): Guide | n
     const along = effective(f.dx, f.sketch.dx);
     const foot = { x: s.a.x + ux * along, y: s.a.y + uy * along };
     const line = target.field === 'dx' ? { a: s.a, b: foot } : { a: foot, b: c };
-    return { ...line, corner: s.a, normal: { x: 0, y: 0 } };
+    return { ...line, corner: s.a, normal: { x: 0, y: 0 }, wallId: null };
   }
 
   const s = segmentFor(layout.outline, f.wallId);
   const span = wallFeatureSpan(layout, f);
-  if (!s || !span) return null;
-  const { nx, ny } = frame(s);
-  const out = insideIsLeft(layout.outline) ? { x: -nx, y: -ny } : { x: nx, y: ny };
+  const out = outwardNormal(layout.outline, f.wallId);
+  if (!s || !span || !out) return null;
   const fromEnd = f.from === 'end';
   const corner = fromEnd ? s.b : s.a;
   const line = target.field === 'offset' ? { a: corner, b: fromEnd ? span.b : span.a } : { a: span.a, b: span.b };
-  return { ...line, corner, normal: out };
+  return { ...line, corner, normal: out, wallId: f.wallId };
+}
+
+/** Unit normal pointing out of the space from a wall (including the closing wall), or null. */
+export function outwardNormal(outline: Outline, wallId: string): Pt | null {
+  const s = segmentFor(outline, wallId);
+  if (!s) return null;
+  const { nx, ny } = frame(s);
+  return insideIsLeft(outline) ? { x: -nx, y: -ny } : { x: nx, y: ny };
 }
 
 /** Post centre. Measured offsets are distances; the side of the wall comes from the sketch tap. */
