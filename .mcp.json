@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "field-form": {
+      "command": "npx",
+      "args": ["tsx", "mcp/src/index.ts"],
+      "env": {
+        "FIELD_FORM_SYNC_URL": "${FIELD_FORM_SYNC_URL:-ws://localhost:8787}"
+      }
+    }
+  }
+}
