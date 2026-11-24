@@ -14,3 +14,20 @@ export const color = {
 
 /** Minimum touch target for gloved hands. */
 export const TOUCH = 64;
+
+/** Layout switches, in dp (same physical size on any screen density). */
+export const breakpoints = {
+  /** Narrower than this (phones in portrait): header shows icons/symbols instead of words. */
+  compactBelow: 500,
+  /**
+   * At least this wide: panels go beside the canvas instead of below it. The office inspector
+   * uses it on any wide screen; the field controls also require landscape.
+   */
+  sideBySideFrom: 700,
+  /** Shorter than this (phones in landscape): dense controls so they fit beside the canvas. */
+  shortBelow: 500,
+} as const;
+
+/** One height for every control in a screen header, so the row lines up. */
+export const HEADER_CONTROL = 52;
+export const HEADER_RADIUS = 12;

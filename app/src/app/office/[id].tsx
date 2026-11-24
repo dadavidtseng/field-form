@@ -11,11 +11,9 @@ import { useLayoutIndex } from '../../sync/useLayoutIndex';
 import { useLayoutSync } from '../../sync/useLayoutSync';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { StatusBadge } from '../../ui/StatusBadge';
-import { color } from '../../ui/theme';
+import { breakpoints, color } from '../../ui/theme';
 
 const TAP_RADIUS_PX = 24;
-/** iPad-class widths get a side panel; phones get it below the canvas. */
-const SIDE_PANEL_MIN_WIDTH = 700;
 
 /** Marcus's read-only view of one layout, live from the field. */
 export default function OfficeLayout() {
@@ -28,7 +26,8 @@ export default function OfficeLayout() {
   const [hit, setHit] = useState<Hit | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const flashIds = useChangeFlash(layout);
-  const wide = useWindowDimensions().width >= SIDE_PANEL_MIN_WIDTH;
+  // iPad-class widths (and phones in landscape) get a side panel; narrow screens get it below.
+  const wide = useWindowDimensions().width >= breakpoints.sideBySideFrom;
   useFollowDana(layouts, id);
 
   const live = layouts.find((l) => l.id === id)?.live ?? false;

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { SyncStatus } from '../sync/SyncClient';
-import { color } from './theme';
+import { HEADER_CONTROL, HEADER_RADIUS, color } from './theme';
 
 const label: Record<SyncStatus, string> = {
   connecting: '○ Connecting',
@@ -32,6 +32,15 @@ export function StatusBadge({
 }
 
 const styles = StyleSheet.create({
-  badge: { borderWidth: 2, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, alignSelf: 'flex-start' },
+  badge: {
+    // minHeight, not height: very large system font sizes grow the badge instead of clipping it.
+    minHeight: HEADER_CONTROL,
+    minWidth: HEADER_CONTROL,
+    borderWidth: 2,
+    borderRadius: HEADER_RADIUS,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   text: { fontSize: 18, fontWeight: '700' },
 });
