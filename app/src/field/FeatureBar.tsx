@@ -1,6 +1,6 @@
 import type { WallFeatureKind } from '@field-form/shared';
 import { createContext, useContext } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { color } from '../ui/theme';
 
 const WALL_FEATURES: { kind: WallFeatureKind; label: string }[] = [
@@ -72,6 +72,7 @@ function FeatureBarBody({
   onRemove,
   onPickField,
 }: Omit<Parameters<typeof FeatureBar>[0], 'dense'>) {
+  const dense = useContext(DenseContext);
   if (placingPost) {
     return (
       <View style={styles.bar}>
@@ -80,28 +81,41 @@ function FeatureBarBody({
       </View>
     );
   }
+
+  const fieldChips = featureName
+    ? fields.map((f) => (
+        <Chip
+          key={f.key}
+          label={`${f.measured ? '✓ ' : ''}${f.label}`}
+          active={f.active}
+          onPress={() => onPickField(f.key)}
+        />
+      ))
+    : [];
+  const actionChips = [
+    ...(wallArmed ? WALL_FEATURES.map((f) => <Chip key={f.kind} label={f.label} onPress={() => onAdd(f.kind)} />) : []),
+    <Chip key="post" label="+ Post" onPress={onPost} />,
+    ...(featureName ? [<Chip key="remove" label={`Remove ${featureName}`} danger onPress={onRemove} />] : []),
+  ];
+
   return (
     <View style={styles.bar}>
       {misfit && (
         <Text style={styles.warn}>{`${featureName} doesn't fit on its wall. Check its width and position.`}</Text>
       )}
-      {featureName && (
-        <View style={styles.row}>
-          {fields.map((f) => (
-            <Chip
-              key={f.key}
-              label={`${f.measured ? '✓ ' : ''}${f.label}`}
-              active={f.active}
-              onPress={() => onPickField(f.key)}
-            />
-          ))}
-        </View>
+      {dense ? (
+        // Short screens: one sideways-scrolling strip, so more chips never push the
+        // measure panel off the bottom.
+        <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.strip}>
+          {fieldChips}
+          {actionChips}
+        </ScrollView>
+      ) : (
+        <>
+          {fieldChips.length > 0 && <View style={styles.row}>{fieldChips}</View>}
+          <View style={styles.row}>{actionChips}</View>
+        </>
       )}
-      <View style={styles.row}>
-        {wallArmed && WALL_FEATURES.map((f) => <Chip key={f.kind} label={f.label} onPress={() => onAdd(f.kind)} />)}
-        <Chip label="+ Post" onPress={onPost} />
-        {featureName && <Chip label={`Remove ${featureName}`} danger onPress={onRemove} />}
-      </View>
     </View>
   );
 }
@@ -139,6 +153,7 @@ function Chip({
 const styles = StyleSheet.create({
   bar: { paddingHorizontal: 12, paddingTop: 8, gap: 6, backgroundColor: color.paper },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  strip: { gap: 8, paddingBottom: 4 },
   prompt: { fontSize: 18, fontWeight: '800', color: color.ink },
   warn: { fontSize: 16, fontWeight: '800', color: color.bad },
   chipDense: { minHeight: 44, paddingHorizontal: 12 },
