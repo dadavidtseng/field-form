@@ -98,17 +98,28 @@ export function InspectPanel({
           Off by {formatLength(Math.abs(sum.closure.errorUm), system)} — {CLOSURE_TEXT[sum.closure.level]}
         </Text>
       )}
-      <Text style={[styles.progress, remaining || sum.openComments ? styles.notReady : styles.ready]}>
-        {remaining
-          ? `${remaining} measurement${remaining === 1 ? '' : 's'} still to take`
-          : sum.openComments
-            ? `All ${sum.total} measured`
-            : `All ${sum.total} measured · ready to quote`}
+      <Text style={[styles.progress, sum.readyToQuote ? styles.ready : styles.notReady]}>
+        {sum.total === 0
+          ? 'Nothing to measure yet'
+          : remaining
+            ? `${remaining} measurement${remaining === 1 ? '' : 's'} still to take`
+            : sum.readyToQuote
+              ? `All ${sum.total} measured · ready to quote`
+              : `All ${sum.total} measured`}
       </Text>
+      {/* Everything else that blocks a quote, so "not ready" always says why. */}
       {sum.openComments > 0 && (
         <Text style={[styles.progress, styles.notReady]}>
           {sum.openComments} open comment{sum.openComments === 1 ? '' : 's'} to resolve
         </Text>
+      )}
+      {sum.misfitIds.length > 0 && (
+        <Text style={[styles.progress, styles.notReady]}>
+          {sum.misfitIds.length} feature{sum.misfitIds.length === 1 ? " doesn't" : "s don't"} fit the wall
+        </Text>
+      )}
+      {sum.closure?.level === 'bad' && (
+        <Text style={[styles.progress, styles.notReady]}>{"Shape doesn't close: re-measure before quoting"}</Text>
       )}
       <Text style={styles.hint}>Tap a wall, door or post to inspect or comment on it.</Text>
       {comments}
