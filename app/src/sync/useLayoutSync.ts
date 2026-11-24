@@ -16,5 +16,5 @@ export function useLayoutSync(layoutId: string, role: Role) {
   }, [client]);
 
   const snapshot = useStore(client.store);
-  return { ...snapshot, submit: client.submit };
+  return { ...snapshot, submit: client.submit, undo: client.undo };
 }
