@@ -108,3 +108,46 @@ describe('simulated tape', () => {
     expect(got).toEqual([100]);
   });
 });
+
+describe('ready to quote', () => {
+  // Every wall of the 12' × 10' room measured, the closing wall within `closingOff` of computed.
+  const measuredRoom = (closingOff = 0) => {
+    let doc = room12x10() as Layout;
+    doc = measure(doc, 'w1', feet(12));
+    doc = measure(doc, 'w2', feet(10));
+    doc = measure(doc, 'w3', feet(12));
+    return measure(doc, null, feet(10) + closingOff);
+  };
+
+  it('is ready when everything is measured and the shape closes', () => {
+    expect(layoutSummary(measuredRoom()).readyToQuote).toBe(true);
+    expect(layoutSummary(measuredRoom(inches(0.5))).readyToQuote).toBe(true); // amber: a second look, not a block
+  });
+
+  it('is not ready when the shape is more than an inch off', () => {
+    expect(layoutSummary(measuredRoom(inches(2))).readyToQuote).toBe(false);
+  });
+
+  it('is not ready when a measured door no longer fits its wall', () => {
+    const doc = applyOp(measuredRoom(), {
+      t: 'feature.add',
+      feature: {
+        id: 'd1',
+        kind: 'door',
+        wallId: 'w1',
+        offset: { value: feet(10), source: 'tape' },
+        width: { value: feet(3), source: 'tape' },
+        sketch: { offset: feet(10), width: feet(3) },
+      },
+    }) as Layout;
+    const s = layoutSummary(doc);
+    expect(s.misfitIds).toEqual(['d1']);
+    expect(s.readyToQuote).toBe(false);
+  });
+
+  it('an empty space is never ready', () => {
+    expect(layoutSummary(applyOp(null, { t: 'layout.create', name: 'X', kind: 'room' }) as Layout).readyToQuote).toBe(
+      false,
+    );
+  });
+});

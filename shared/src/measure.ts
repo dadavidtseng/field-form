@@ -10,7 +10,7 @@
  */
 
 import { featureNames } from './features';
-import { SQ_UM_PER_SQ_FT, area, closure, perimeter, segments } from './geometry';
+import { SQ_UM_PER_SQ_FT, area, closure, featureFits, perimeter, segments } from './geometry';
 import { DETAIL_FIELDS, type Dimension, type DimensionTarget, type Feature, type Layout } from './model';
 import { inches, type Um } from './units';
 
@@ -183,18 +183,38 @@ export interface LayoutSummaryNumbers {
   total: number;
   /** Unresolved comments: an open question also means "not ready to quote". */
   openComments: number;
+  /** Features that no longer fit their wall after a re-measure (flagged, never moved). */
+  misfitIds: string[];
+  /**
+   * Safe to quote from: something drawn, every required measurement taken, no open questions,
+   * no feature hanging off its wall, and the shape closes to within an inch.
+   */
+  readyToQuote: boolean;
 }
 
 /** What an estimator needs first: size, how trustworthy it is, and what is still missing. */
 export function layoutSummary(layout: Layout): LayoutSummaryNumbers {
   const slots = measureSlots(layout);
   const sqUm = area(layout.outline);
+  const progress = requiredProgress(slots);
+  const closureNow = closureCheck(layout);
+  const openComments = Object.values(layout.comments ?? {}).filter((c) => !c.resolved).length;
+  const misfitIds = Object.values(layout.features)
+    .filter((f) => !featureFits(layout, f))
+    .map((f) => f.id);
   return {
     perimeterUm: perimeter(layout.outline),
     areaSqFt: sqUm === null ? null : sqUm / SQ_UM_PER_SQ_FT,
     areaSqUm: sqUm,
-    closure: closureCheck(layout),
-    ...requiredProgress(slots),
-    openComments: Object.values(layout.comments ?? {}).filter((c) => !c.resolved).length,
+    closure: closureNow,
+    ...progress,
+    openComments,
+    misfitIds,
+    readyToQuote:
+      progress.total > 0 &&
+      progress.measured === progress.total &&
+      openComments === 0 &&
+      misfitIds.length === 0 &&
+      closureNow?.level !== 'bad',
   };
 }
