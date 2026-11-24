@@ -96,7 +96,8 @@ export function describeSpace(layout: Layout, system: UnitSystem = 'imperial') {
       ? { closureError: fmt(Math.abs(sum.closure.errorUm), system), closureCheck: sum.closure.level }
       : {}),
     progress: `${sum.measured} of ${sum.total} required measurements taken`,
-    readyToQuote: sum.measured === sum.total && sum.openComments === 0,
+    readyToQuote: sum.readyToQuote,
+    ...(sum.misfitIds.length ? { doesNotFit: sum.misfitIds.map((id) => names[id]) } : {}),
     stillToMeasure: [
       ...walls.filter((w) => w.value === null).map((w) => w.name),
       ...features.flatMap((f) =>
