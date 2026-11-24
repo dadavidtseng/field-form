@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { feet, formatFeetInches, formatLength, inches, mm, parseLength } from './units';
+import { feet, formatArea, formatFeetInches, formatLength, inches, mm, parseLength } from './units';
 
 describe('formatFeetInches', () => {
   it.each([
@@ -17,6 +17,14 @@ describe('formatFeetInches', () => {
   it('formats metric', () => {
     expect(formatLength(mm(3760), 'metric')).toBe('3760 mm');
     expect(formatLength(mm(12.345), 'metric', true)).toBe('12.35 mm');
+  });
+});
+
+describe('formatArea', () => {
+  it('square feet and square metres', () => {
+    const tenByTwelveFt = feet(10) * feet(12);
+    expect(formatArea(tenByTwelveFt)).toBe('120.0 sq ft');
+    expect(formatArea(tenByTwelveFt, 'metric')).toBe('11.15 m²');
   });
 });
 

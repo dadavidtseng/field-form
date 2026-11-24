@@ -54,6 +54,16 @@ export function formatLength(um: Um, system: UnitSystem = 'imperial', detail = f
   return system === 'imperial' ? formatFeetInches(um, detail ? 32 : 16) : formatMillimetres(um, detail ? 2 : 0);
 }
 
+/** The other system, for showing a value's secondary reading (e.g. mm under ft-in). */
+export const otherSystem = (system: UnitSystem): UnitSystem => (system === 'imperial' ? 'metric' : 'imperial');
+
+/** Area in µm², as square feet (one decimal) or square metres (two decimals). */
+export function formatArea(sqUm: number, system: UnitSystem = 'imperial'): string {
+  return system === 'imperial'
+    ? `${(sqUm / (UM_PER_FOOT * UM_PER_FOOT)).toFixed(1)} sq ft`
+    : `${(sqUm / 1e12).toFixed(2)} m²`;
+}
+
 const METRIC = /^(\d+(?:\.\d+)?)\s*(mm|cm|m)$/;
 const FEET = /^(?:(\d+(?:\.\d+)?)\s*(?:'|ft)\s*)?(.*)$/;
 // Either `W`, `W-N/D` / `W N/D` (separator required), or a bare `N/D`.

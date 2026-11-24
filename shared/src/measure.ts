@@ -1,10 +1,18 @@
+/**
+ * ---------------------------------------------------------------------------------------------------
+ * measure.ts
+ *
+ * The measuring flow: which slots exist, in what order Dana fills them, and how far a closed outline
+ * is out once the closing wall is measured.
+ *
+ * @module shared/src
+ * ---------------------------------------------------------------------------------------------------
+ */
+
 import { featureNames } from './features';
 import { SQ_UM_PER_SQ_FT, area, closure, perimeter, segments } from './geometry';
 import { DETAIL_FIELDS, type Dimension, type DimensionTarget, type Feature, type Layout } from './model';
 import { inches, type Um } from './units';
-
-// The measuring flow: which slots exist, in what order Dana fills them, and how far
-// a closed outline is out once the closing wall is measured.
 
 export interface Slot {
   target: DimensionTarget;
@@ -168,6 +176,8 @@ export interface LayoutSummaryNumbers {
   perimeterUm: Um;
   /** Square feet for closed shapes (decks, floors); null for an open line. */
   areaSqFt: number | null;
+  /** The same area in µm², for formatting in either unit system. */
+  areaSqUm: number | null;
   closure: { errorUm: Um; level: ClosureLevel } | null;
   measured: number;
   total: number;
@@ -182,6 +192,7 @@ export function layoutSummary(layout: Layout): LayoutSummaryNumbers {
   return {
     perimeterUm: perimeter(layout.outline),
     areaSqFt: sqUm === null ? null : sqUm / SQ_UM_PER_SQ_FT,
+    areaSqUm: sqUm,
     closure: closureCheck(layout),
     ...requiredProgress(slots),
     openComments: Object.values(layout.comments ?? {}).filter((c) => !c.resolved).length,
