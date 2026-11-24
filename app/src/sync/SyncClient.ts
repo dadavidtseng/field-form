@@ -6,6 +6,7 @@ import {
   initialState,
   receiveCommit,
   receiveReject,
+  restoreState,
   submitLocal,
   type Dropped,
   type LayoutDoc,
@@ -17,6 +18,7 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { createStore } from 'zustand/vanilla';
 import { ReconnectingSocket } from './ReconnectingSocket';
+import { sqliteStorage, type StateStorage } from './localStore';
 
 export type SyncStatus = 'connecting' | 'syncing' | 'online' | 'offline';
 
@@ -33,7 +35,7 @@ export interface SyncSnapshot {
 /**
  * Connects one layout to the shared sync state machine. All ordering, replay and rejection
  * rules live in `@field-form/shared`; this class only feeds it messages.
- * `state` lives in memory for now; it survives reconnects but not an app restart.
+ * State is saved on the device after every change, so unsent edits survive an app restart.
  */
 export class SyncClient {
   readonly store = createStore<SyncSnapshot>(() => ({
@@ -55,7 +57,16 @@ export class SyncClient {
     private readonly layoutId: string,
     private readonly clientId: string,
     private readonly role: Role,
+    private readonly storage: StateStorage = sqliteStorage,
   ) {
+    // Show what was saved on this device straight away, before (or without) a connection.
+    const saved = this.tryStorage(() => storage.load(layoutId));
+    if (saved) {
+      const t = restoreState<LayoutDoc, Op>(saved.confirmed, saved.lastSeq, saved.pending, applyOp);
+      this.state = t.state;
+      this.report(t.dropped);
+      this.publish();
+    }
     this.socket = new ReconnectingSocket(url, {
       onOpen: () => this.socket.send({ type: 'hello', layoutId, clientId, role, lastSeq: this.state.lastSeq }),
       onMessage: (msg) => this.handle(msg),
@@ -88,6 +99,7 @@ export class SyncClient {
     }
     const emptyInverse = inverse.t === 'batch' && inverse.ops.length === 0;
     if (options.undoable !== false && !emptyInverse) this.undoStack.push(inverse);
+    this.persist(); // saved before it can be sent, so a crash right after cannot lose it
     if (this.ready) this.socket.send({ type: 'submit', ...pending });
     this.publish();
     return null;
@@ -113,6 +125,7 @@ export class SyncClient {
           const t = receiveCommit(this.state, msg, applyOp);
           this.state = t.state;
           this.report(t.dropped);
+          this.persist(); // new confirmed state, lastSeq and pending saved together
         } catch (e) {
           if (e instanceof SyncGapError) return this.socket.reconnect(); // replay from lastSeq
           throw e;
@@ -129,12 +142,32 @@ export class SyncClient {
         const t = receiveReject(this.state, msg, applyOp);
         this.state = t.state;
         this.report(t.dropped);
+        this.persist();
         break;
       }
       case 'index':
         return;
     }
     this.publish();
+  }
+
+  private persist(): void {
+    const { confirmed, lastSeq, pending } = this.state;
+    this.tryStorage(() => this.storage.save(this.layoutId, { confirmed, lastSeq, pending }));
+  }
+
+  /**
+   * Storage failing (e.g. a full disk) must not stop Dana working: edits still sync while
+   * online, so warn instead of crashing.
+   */
+  private tryStorage<T>(fn: () => T): T | null {
+    try {
+      return fn();
+    } catch (e) {
+      console.warn('[sync] could not use on-device storage', e);
+      this.store.setState({ notice: 'Could not save on this device. Edits still sync while online.' });
+      return null;
+    }
   }
 
   private report(dropped: Dropped<Op>[]): void {

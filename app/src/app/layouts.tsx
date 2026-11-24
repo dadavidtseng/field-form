@@ -1,10 +1,10 @@
-import type { LayoutSummary, Role } from '@field-form/shared';
+import type { Role } from '@field-form/shared';
 import { randomUUID } from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFollowDana, useFollowStore } from '../state/follow';
-import { useLayoutIndex } from '../sync/useLayoutIndex';
+import { useLayoutIndex, type LayoutRow } from '../sync/useLayoutIndex';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { TOUCH, color } from '../ui/theme';
 
@@ -18,7 +18,7 @@ function ago(ts: number): string {
 /** Both roles start here: every layout, newest first, with the one Dana has open marked live. */
 export default function LayoutList() {
   const { role } = useLocalSearchParams<{ role: Role }>();
-  const { layouts } = useLayoutIndex(role);
+  const { layouts, rows } = useLayoutIndex(role);
   const follow = useFollowStore((s) => s.follow);
   const setFollow = useFollowStore((s) => s.setFollow);
   useFollowDana(role === 'office' ? layouts : [], null);
@@ -56,7 +56,7 @@ export default function LayoutList() {
         </View>
       )}
       <FlatList
-        data={layouts}
+        data={rows}
         keyExtractor={(l) => l.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
@@ -70,7 +70,7 @@ export default function LayoutList() {
   );
 }
 
-function Row({ item, onPress }: { item: LayoutSummary; onPress: () => void }) {
+function Row({ item, onPress }: { item: LayoutRow; onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -89,6 +89,7 @@ function Row({ item, onPress }: { item: LayoutSummary; onPress: () => void }) {
         </Text>
       </View>
       {item.live && <Text style={styles.live}>● live</Text>}
+      {item.unsynced && <Text style={styles.unsynced}>◐ not synced yet</Text>}
     </Pressable>
   );
 }
@@ -125,4 +126,5 @@ const styles = StyleSheet.create({
   rowName: { fontSize: 22, fontWeight: '800', color: color.ink },
   rowMeta: { fontSize: 16, color: color.muted, marginTop: 4 },
   live: { fontSize: 18, fontWeight: '800', color: color.ok },
+  unsynced: { fontSize: 16, fontWeight: '800', color: color.warn },
 });
