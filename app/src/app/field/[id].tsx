@@ -1,14 +1,21 @@
 import {
   SimulatedTape,
   closureCheck,
+  featureFits,
+  featureNames,
   hitTest,
+  measureGuide,
+  placePost,
+  placeWallFeature,
   measureSlots,
   nextUnmeasured,
   snapCorner,
   targetKey,
   wallsFromCorners,
   type BaseOp,
+  type Feature,
   type LayoutKind,
+  type WallFeatureKind,
   type Op,
   type Pt,
   type Reading,
@@ -23,6 +30,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayoutCanvas } from '../../canvas/LayoutCanvas';
+import { FeatureBar } from '../../field/FeatureBar';
 import { Keypad } from '../../field/Keypad';
 import { LayoutMenu } from '../../field/LayoutMenu';
 import { MeasurePanel } from '../../field/MeasurePanel';
@@ -54,6 +62,9 @@ export default function FieldLayout() {
 
   const [draft, setDraft] = useState<Pt[]>([]);
   const [armedKey, setArmedKey] = useState<string | null>(null);
+  /** Where the armed wall was tapped: a new door/window goes there. */
+  const [lastWallTap, setLastWallTap] = useState<Pt | null>(null);
+  const [placingPost, setPlacingPost] = useState(false);
   const [keypad, setKeypad] = useState<null | 'manual' | 'next'>(null);
   const [nextOverride, setNextOverride] = useState<Um | null>(null);
   const [realisticError, setRealisticError] = useState(false);
@@ -74,6 +85,8 @@ export default function FieldLayout() {
   const slots = useMemo(() => (layout ? measureSlots(layout) : []), [layout]);
   const armed: Slot | null = slots.find((s) => s.key === armedKey) ?? nextUnmeasured(slots);
   const nextReading = nextOverride ?? armed?.estimateUm ?? 0;
+  const slotsOf = (featureId: string) =>
+    slots.filter((s) => s.target.kind === 'feature' && s.target.featureId === featureId);
 
   const run = (op: Op) => setError(sync.submit(op));
 
@@ -123,14 +136,54 @@ export default function FieldLayout() {
 
   const tapWhileMeasuring = (p: Pt, radius: number) => {
     if (!layout) return;
+    if (placingPost) return addPost(p);
     const hit = hitTest(layout, p, radius);
-    if (hit?.kind !== 'wall') return;
+    if (!hit) return;
+    setNextOverride(null);
+    if (hit.kind === 'feature') {
+      const own = slotsOf(hit.id);
+      const current = own.findIndex((s) => s.key === armed?.key);
+      // Tapping the armed feature again steps to its next measurement; otherwise arm its first
+      // empty measurement, or its first one to re-measure.
+      const next = current >= 0 ? own[(current + 1) % own.length] : (own.find((s) => s.value === null) ?? own[0]);
+      setArmedKey(next?.key ?? null);
+      return;
+    }
     const target =
       hit.id === layout.outline.closingWallId
         ? ({ kind: 'closing' } as const)
         : ({ kind: 'wall', wallId: hit.id } as const);
     setArmedKey(targetKey(target));
+    setLastWallTap(p);
+  };
+
+  // ---- features ----
+
+  /** Add a feature and arm its first measurement, so the next tape press measures it. */
+  const addFeature = (feature: Feature | null, firstField: string) => {
+    if (!feature) return;
+    const err = sync.submit({ t: 'feature.add', feature });
+    setError(err);
+    if (err) return;
+    setArmedKey(targetKey({ kind: 'feature', featureId: feature.id, field: firstField }));
     setNextOverride(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const addWallFeature = (kind: WallFeatureKind) => {
+    if (!layout || !armedWallId) return;
+    addFeature(placeWallFeature(layout, armedWallId, kind, randomUUID(), lastWallTap ?? undefined), 'width');
+  };
+
+  function addPost(p: Pt) {
+    setPlacingPost(false);
+    if (layout) addFeature(placePost(layout, p, randomUUID()), 'dx');
+  }
+
+  const removeArmedFeature = () => {
+    if (!armedFeatureId) return;
+    run({ t: 'feature.remove', id: armedFeatureId });
+    setArmedKey(null);
   };
 
   const onTap = (p: Pt, umPerPx: number) =>
@@ -142,7 +195,14 @@ export default function FieldLayout() {
   };
 
   const armedWallId =
-    armed?.target.kind === 'wall' ? armed.target.wallId : armed ? layout?.outline.closingWallId : null;
+    armed?.target.kind === 'wall'
+      ? armed.target.wallId
+      : armed?.target.kind === 'closing'
+        ? (layout?.outline.closingWallId ?? null)
+        : null;
+  const armedFeatureId = armed?.target.kind === 'feature' ? armed.target.featureId : null;
+  const armedFeature = armedFeatureId ? layout?.features[armedFeatureId] : undefined;
+  const names = layout ? featureNames(layout) : {};
   const measuredCount = slots.filter((s) => s.value !== null).length;
 
   return (
@@ -178,7 +238,13 @@ export default function FieldLayout() {
           </>
         }
       />
-      <LayoutCanvas layout={layout} selectedId={sketching ? null : armedWallId} onTap={onTap} draft={draft} />
+      <LayoutCanvas
+        layout={layout}
+        selectedId={sketching ? null : (armedFeatureId ?? armedWallId)}
+        guide={!sketching && layout && armed ? measureGuide(layout, armed.target) : null}
+        onTap={onTap}
+        draft={draft}
+      />
       {(error || sync.notice) && <Text style={styles.error}>{error ?? sync.notice}</Text>}
       {layout?.archived && (
         <View style={styles.deleted}>
@@ -195,18 +261,39 @@ export default function FieldLayout() {
             onFinishOpen={() => finishSketch(false)}
           />
         ) : (
-          <MeasurePanel
-            slot={armed}
-            measuredCount={measuredCount}
-            totalCount={slots.length}
-            nextReading={nextReading}
-            realisticError={realisticError}
-            closure={closureCheck(layout)}
-            onTape={() => tape.press(nextReading, realisticError)}
-            onManual={() => setKeypad('manual')}
-            onEditNext={() => setKeypad('next')}
-            onToggleError={setRealisticError}
-          />
+          <>
+            <FeatureBar
+              wallArmed={!!armedWallId}
+              featureName={armedFeatureId ? (names[armedFeatureId] ?? null) : null}
+              placingPost={placingPost}
+              misfit={!!(layout && armedFeature && !featureFits(layout, armedFeature))}
+              onAdd={addWallFeature}
+              onPost={() => setPlacingPost(!placingPost)}
+              onRemove={removeArmedFeature}
+              fields={(armedFeatureId ? slotsOf(armedFeatureId) : []).map((s) => ({
+                key: s.key,
+                label: s.label.split(' · ')[1] ?? s.label,
+                active: s.key === armed?.key,
+                measured: s.value !== null,
+              }))}
+              onPickField={(key) => {
+                setArmedKey(key);
+                setNextOverride(null);
+              }}
+            />
+            <MeasurePanel
+              slot={armed}
+              measuredCount={measuredCount}
+              totalCount={slots.length}
+              nextReading={nextReading}
+              realisticError={realisticError}
+              closure={closureCheck(layout)}
+              onTape={() => tape.press(nextReading, realisticError)}
+              onManual={() => setKeypad('manual')}
+              onEditNext={() => setKeypad('next')}
+              onToggleError={setRealisticError}
+            />
+          </>
         ))}
       {menuOpen && layout && (
         <LayoutMenu
