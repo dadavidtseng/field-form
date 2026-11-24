@@ -1,0 +1,83 @@
+import { describe, expect, it } from 'vitest';
+import type { Layout } from './model';
+import { applyOp } from './ops';
+import { closureCheck, closureLevel, measureSlots, nextUnmeasured } from './measure';
+import { SimulatedTape } from './tape';
+import { room12x10 } from './test-helpers';
+import { feet, inches } from './units';
+
+const measure = (doc: Layout, wallId: string | null, value: number): Layout =>
+  applyOp(doc, {
+    t: 'dimension.set',
+    target: wallId ? { kind: 'wall', wallId } : { kind: 'closing' },
+    dim: { value, source: 'tape' },
+  }) as Layout;
+
+describe('measuring order', () => {
+  it('walks the drawn walls, then the closing wall', () => {
+    const slots = measureSlots(room12x10()!);
+    expect(slots.map((s) => s.label)).toEqual([
+      'Wall 1 of 4',
+      'Wall 2 of 4',
+      'Wall 3 of 4',
+      'Last wall · back to start (4 of 4)',
+    ]);
+    expect(slots[3]!.estimateUm).toBe(feet(10));
+  });
+
+  it('auto-advances to the next empty slot and wraps round', () => {
+    let doc = measure(room12x10()!, 'w1', feet(12));
+    expect(nextUnmeasured(measureSlots(doc), 'wall:w1')!.key).toBe('wall:w2');
+    doc = measure(measure(doc, 'w2', feet(10)), 'w3', feet(12));
+    expect(nextUnmeasured(measureSlots(doc), 'wall:w3')!.key).toBe('closing');
+    doc = measure(doc, null, feet(10));
+    expect(nextUnmeasured(measureSlots(doc), 'closing')).toBeNull();
+  });
+
+  it('skips already-measured slots when wrapping', () => {
+    const doc = measure(room12x10()!, 'w2', feet(10));
+    expect(nextUnmeasured(measureSlots(doc), 'closing')!.key).toBe('wall:w1');
+    expect(nextUnmeasured(measureSlots(doc), 'wall:w1')!.key).toBe('wall:w3');
+  });
+});
+
+describe('closure check', () => {
+  it.each([
+    [inches(0.125), 'ok'],
+    [-inches(0.5), 'warn'],
+    [inches(2), 'bad'],
+  ] as const)('%i µm → %s', (err, level) => expect(closureLevel(err)).toBe(level));
+
+  it('is only judged once the closing wall is measured', () => {
+    const doc = room12x10()!;
+    expect(closureCheck(doc)).toBeNull();
+    expect(closureCheck(measure(doc, null, feet(10) + inches(0.5)))).toEqual({ errorUm: inches(0.5), level: 'warn' });
+  });
+});
+
+describe('simulated tape', () => {
+  it('without error, reads exactly the requested value', () => {
+    expect(new SimulatedTape().press(feet(12)).value).toBe(feet(12));
+  });
+
+  it('with error, the same seed replays the same readings, within ±1/8"', () => {
+    const run = () => {
+      const tape = new SimulatedTape(7, () => 0);
+      return [1, 2, 3, 4, 5].map(() => tape.press(feet(10), true).value);
+    };
+    const a = run();
+    expect(run()).toEqual(a);
+    for (const v of a) expect(Math.abs(v - feet(10))).toBeLessThanOrEqual(inches(1 / 8));
+    expect(new Set(a).size).toBeGreaterThan(1);
+  });
+
+  it('notifies listeners', () => {
+    const tape = new SimulatedTape();
+    const got: number[] = [];
+    const off = tape.onReading((r) => got.push(r.value));
+    tape.press(100);
+    off();
+    tape.press(200);
+    expect(got).toEqual([100]);
+  });
+});
